@@ -25,6 +25,7 @@ without clobbering other settings already there.
 | `git/.gitconfig` | `~/.gitconfig` | Git identity |
 | `claude/statusline-command.sh` | `~/.claude/statusline-command.sh` | Claude Code status line script |
 | `claude/settings.snippet.json` | merged into `~/.claude/settings.json` | Registers the status line command |
+| `claude/CLAUDE.md` | `~/.claude/CLAUDE.md` | Global Claude Code instructions (all projects) |
 
 Third-party frameworks (Oh My Zsh, zsh-autosuggestions, zsh-syntax-highlighting,
 Powerlevel10k) are **not** vendored here — `install.sh` clones them fresh from

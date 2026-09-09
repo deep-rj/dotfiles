@@ -38,6 +38,7 @@ link "$DOTFILES_DIR/zsh/.p10k.zsh" "$HOME/.p10k.zsh"
 link "$DOTFILES_DIR/bash/.bashrc" "$HOME/.bashrc"
 link "$DOTFILES_DIR/git/.gitconfig" "$HOME/.gitconfig"
 link "$DOTFILES_DIR/claude/statusline-command.sh" "$HOME/.claude/statusline-command.sh"
+link "$DOTFILES_DIR/claude/CLAUDE.md" "$HOME/.claude/CLAUDE.md"
 
 echo "== Merging Claude Code statusLine into ~/.claude/settings.json =="
 python3 - "$DOTFILES_DIR/claude/settings.snippet.json" "$HOME/.claude/settings.json" <<'EOF'
