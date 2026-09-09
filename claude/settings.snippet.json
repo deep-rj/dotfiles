@@ -2,5 +2,23 @@
   "statusLine": {
     "type": "command",
     "command": "bash ~/.claude/statusline-command.sh"
+  },
+  "attribution": {
+    "commit": "",
+    "pr": "",
+    "sessionUrl": false
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // .tool_input.notebook_path // empty' | { read -r f; case \"$f\" in *.py|*.pyi|*.ipynb) uvx ruff check --fix \"$f\"; uvx ruff format \"$f\";; esac; } 2>/dev/null || true"
+          }
+        ]
+      }
+    ]
   }
 }

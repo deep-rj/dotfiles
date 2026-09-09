@@ -24,7 +24,7 @@ without clobbering other settings already there.
 | `bash/.bashrc` | `~/.bashrc` | Bash fallback for shells/images without zsh |
 | `git/.gitconfig` | `~/.gitconfig` | Git identity |
 | `claude/statusline-command.sh` | `~/.claude/statusline-command.sh` | Claude Code status line script |
-| `claude/settings.snippet.json` | merged into `~/.claude/settings.json` | Registers the status line command |
+| `claude/settings.snippet.json` | merged into `~/.claude/settings.json` | Registers the status line command, ruff auto-fix/format hook, and attribution suppression |
 | `claude/CLAUDE.md` | `~/.claude/CLAUDE.md` | Global Claude Code instructions (all projects) |
 
 Third-party frameworks (Oh My Zsh, zsh-autosuggestions, zsh-syntax-highlighting,
