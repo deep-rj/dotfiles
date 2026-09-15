@@ -4,6 +4,24 @@ Personal shell and tool configuration, kept here so it can be bootstrapped onto
 any new machine (laptop or ephemeral cloud GPU pod) in one command instead of
 being reconfigured by hand each time.
 
+## Prerequisites
+
+`install.sh` checks for the hard requirements below and fails with a clear
+message if one's missing. The rest are only needed for the specific piece
+they power — without them that piece silently does nothing rather than
+breaking the bootstrap.
+
+| Tool | Needed for | Hard requirement? | Get it |
+|---|---|---|---|
+| `git` | cloning this repo, and Oh My Zsh + plugins | yes | preinstalled almost everywhere; else `apt install git` / `brew install git` |
+| `bash` | running `install.sh` | yes | preinstalled almost everywhere |
+| `python3` | the settings.json merge (`claude/merge_settings.py`) | yes | Linux: `apt install python3`; macOS: `xcode-select --install` or `brew install python3` |
+| `zsh` | actually using `.zshrc` (Oh My Zsh, Powerlevel10k) | no — `.bashrc` is tracked as a fallback | `apt install zsh` / `brew install zsh` |
+| `jq` | Claude Code's PostToolUse hook, to read the tool-call JSON | no — hook no-ops without it | `apt install jq` / `brew install jq` |
+| `uv` (for `uvx`) | the hook's Python auto-fix/format (ruff) | no | https://docs.astral.sh/uv/getting-started/installation/ |
+| `nvm` + Node (for `npx`) | the hook's JS/TS auto-fix/format (biome) | no | https://github.com/nvm-sh/nvm#install--update-script |
+| [Claude Code](https://claude.com/product/claude-code) | `statusLine`/hooks/`CLAUDE.md` to have any effect | no — shell/git config works standalone | see their install docs |
+
 ## Bootstrap
 
 ```bash

@@ -6,6 +6,13 @@
 # to only preview.
 set -euo pipefail
 
+for cmd in git python3; do
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    echo "install.sh needs '$cmd' on PATH - see README.md#prerequisites." >&2
+    exit 1
+  fi
+done
+
 DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
 BACKUP_DIR="$HOME/.dotfiles-backup/$(date +%Y%m%d%H%M%S)"
