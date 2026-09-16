@@ -22,8 +22,7 @@ if command -v gitleaks >/dev/null 2>&1; then
   gitleaks detect --source . --log-opts="--all" --no-banner || FOUND=1
 else
   echo "WARNING: gitleaks not installed - SKIPPING this scan pass (falling back to weaker pattern matching only)." >&2
-  echo "  Install it for real secret-scanning coverage: sudo apt-get install -y gitleaks" >&2
-  echo "  (or see other install options: https://github.com/gitleaks/gitleaks#installing)" >&2
+  echo "  Install it for real secret-scanning coverage: https://github.com/gitleaks/gitleaks#installing" >&2
 fi
 
 if command -v trufflehog >/dev/null 2>&1; then

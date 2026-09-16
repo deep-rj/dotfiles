@@ -18,11 +18,10 @@ breaking the bootstrap.
 | `python3` | the settings.json merge (`claude/merge_settings.py`) | yes | Linux: `apt install python3`; macOS: `xcode-select --install` or `brew install python3` |
 | `zsh` | actually using `.zshrc` (Oh My Zsh, Powerlevel10k) | no — `.bashrc` is tracked as a fallback | `apt install zsh` / `brew install zsh` |
 | `jq` | Claude Code's PostToolUse hook (reading tool-call JSON) and the `extract-public-repo` skill's `migrate-claude-metadata.sh` | no — hook no-ops without it; the skill script hard-errors if it's missing | `apt install jq` / `brew install jq` |
-| `uv` (for `uvx`) | the hook's Python auto-fix/format (ruff) | no | https://docs.astral.sh/uv/getting-started/installation/ |
+| `uv` (for `uvx`) | the hook's Python auto-fix/format (ruff), and running `git-filter-repo` on demand (via `uvx --from git-filter-repo git-filter-repo`) in the `extract-public-repo` skill | no | https://docs.astral.sh/uv/getting-started/installation/ |
 | `nvm` + Node (for `npx`) | the hook's JS/TS auto-fix/format (biome) | no | https://github.com/nvm-sh/nvm#install--update-script |
 | `gitleaks` | the `extract-public-repo` skill's secret scan | no — scan falls back to weaker pattern matching without it | `apt install gitleaks` / see https://github.com/gitleaks/gitleaks#installing |
 | `trufflehog` | the `extract-public-repo` skill's secret scan (verified-live-credential detection) | no — scan skips this pass without it | https://github.com/trufflesecurity/trufflehog#installation |
-| `git-filter-repo` | the `extract-public-repo` skill, only if preserving history instead of squashing it | no — skill defaults to squashing to fresh history, which doesn't need it | `apt install git-filter-repo` / https://github.com/newren/git-filter-repo#how-do-i-install-it |
 | [Claude Code](https://claude.com/product/claude-code) | `statusLine`/hooks/`CLAUDE.md`/skills to have any effect | no — shell/git config works standalone | see their install docs |
 
 ## Bootstrap
