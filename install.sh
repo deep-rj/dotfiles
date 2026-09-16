@@ -50,6 +50,7 @@ LINKS=(
   "$DOTFILES_DIR/git/.gitconfig|$HOME/.gitconfig"
   "$DOTFILES_DIR/claude/statusline-command.sh|$HOME/.claude/statusline-command.sh"
   "$DOTFILES_DIR/claude/CLAUDE.md|$HOME/.claude/CLAUDE.md"
+  "$DOTFILES_DIR/claude/skills/extract-public-repo|$HOME/.claude/skills/extract-public-repo"
 )
 SETTINGS_SNIPPET="$DOTFILES_DIR/claude/settings.snippet.json"
 SETTINGS_FILE="$HOME/.claude/settings.json"

@@ -17,10 +17,13 @@ breaking the bootstrap.
 | `bash` | running `install.sh` | yes | preinstalled almost everywhere |
 | `python3` | the settings.json merge (`claude/merge_settings.py`) | yes | Linux: `apt install python3`; macOS: `xcode-select --install` or `brew install python3` |
 | `zsh` | actually using `.zshrc` (Oh My Zsh, Powerlevel10k) | no — `.bashrc` is tracked as a fallback | `apt install zsh` / `brew install zsh` |
-| `jq` | Claude Code's PostToolUse hook, to read the tool-call JSON | no — hook no-ops without it | `apt install jq` / `brew install jq` |
+| `jq` | Claude Code's PostToolUse hook (reading tool-call JSON) and the `extract-public-repo` skill's `migrate-claude-metadata.sh` | no — hook no-ops without it; the skill script hard-errors if it's missing | `apt install jq` / `brew install jq` |
 | `uv` (for `uvx`) | the hook's Python auto-fix/format (ruff) | no | https://docs.astral.sh/uv/getting-started/installation/ |
 | `nvm` + Node (for `npx`) | the hook's JS/TS auto-fix/format (biome) | no | https://github.com/nvm-sh/nvm#install--update-script |
-| [Claude Code](https://claude.com/product/claude-code) | `statusLine`/hooks/`CLAUDE.md` to have any effect | no — shell/git config works standalone | see their install docs |
+| `gitleaks` | the `extract-public-repo` skill's secret scan | no — scan falls back to weaker pattern matching without it | `apt install gitleaks` / see https://github.com/gitleaks/gitleaks#installing |
+| `trufflehog` | the `extract-public-repo` skill's secret scan (verified-live-credential detection) | no — scan skips this pass without it | https://github.com/trufflesecurity/trufflehog#installation |
+| `git-filter-repo` | the `extract-public-repo` skill, only if preserving history instead of squashing it | no — skill defaults to squashing to fresh history, which doesn't need it | `apt install git-filter-repo` / https://github.com/newren/git-filter-repo#how-do-i-install-it |
+| [Claude Code](https://claude.com/product/claude-code) | `statusLine`/hooks/`CLAUDE.md`/skills to have any effect | no — shell/git config works standalone | see their install docs |
 
 ## Bootstrap
 
@@ -62,6 +65,7 @@ safe to delete its backup directory.
 | `claude/statusline-command.sh` | `~/.claude/statusline-command.sh` | Claude Code status line script |
 | `claude/settings.snippet.json` | merged into `~/.claude/settings.json` | Registers the status line command, ruff (Python) and biome (JS/TS) auto-fix/format hooks, and attribution suppression |
 | `claude/CLAUDE.md` | `~/.claude/CLAUDE.md` | Global Claude Code instructions (all projects) |
+| `claude/skills/extract-public-repo/` | `~/.claude/skills/extract-public-repo/` | Skill for spinning off a private repo (or subset of one) as a public repo, safely |
 
 Third-party frameworks (Oh My Zsh, zsh-autosuggestions, zsh-syntax-highlighting,
 Powerlevel10k) are **not** vendored here — `install.sh` clones them fresh from
