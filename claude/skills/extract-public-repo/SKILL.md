@@ -1,6 +1,7 @@
 ---
 name: extract-public-repo
 description: Use when publishing an internal or private repository as a public one — spinning off an open-source project, a public SDK/client, or any subset of a private codebase intended for an external audience.
+argument-hint: "[source-repo-path]"
 allowed-tools:
   - Read
   - Write
@@ -23,6 +24,7 @@ allowed-tools:
   - Bash(trufflehog*)
   - Bash(mv*)
   - Bash(jq*)
+  - Bash(${CLAUDE_SKILL_DIR}/scripts/resolve-source.sh*)
   - Bash(${CLAUDE_SKILL_DIR}/scripts/init-extraction.sh*)
   - Bash(${CLAUDE_SKILL_DIR}/scripts/scan-secrets.sh*)
   - Bash(${CLAUDE_SKILL_DIR}/scripts/fresh-history.sh*)
@@ -47,7 +49,7 @@ Scripts referenced below live under `${CLAUDE_SKILL_DIR}/scripts/` — use that 
 
 Work in this order — get onto a safe copy first, then secrets, then polish.
 
-1. **Determine the destination.** Ask the user where the new repo should live locally and what it should be named — don't assume it matches the private repo's directory name; public names are often chosen deliberately and may differ from an internal codename.
+1. **Resolve the source repo, then determine the destination.** Run `${CLAUDE_SKILL_DIR}/scripts/resolve-source.sh $1` — the script defaults to the current directory when no argument was given, normalizes to the repo's toplevel either way so an argument (or cwd) that points into a subdirectory still resolves correctly, and fails clearly if the path isn't inside a git repo at all — surface that error to the user and ask for the right path rather than guessing. State the resolved source repo path back to the user at the same time you ask where the new repo should live locally and what it should be named, so they can catch a wrong interpretation before anything is cloned — don't assume the destination name matches the private repo's directory name; public names are often chosen deliberately and may differ from an internal codename.
    - If the user wants the public repo to take over the private repo's *current* name, that means renaming the private repo's directory first. Ask explicitly before doing this — don't do it silently. Renaming the directory orphans Claude Code's own project state for it (session transcripts/memory under `~/.claude/projects/`, plus the entry in `~/.claude.json`) unless that state is migrated too — there's no official `claude project` command for this (it only offers `purge`, which deletes), but run `${CLAUDE_SKILL_DIR}/scripts/migrate-claude-metadata.sh <old-abs-path> <new-abs-path>` after the `mv` to do it: it relocates the `~/.claude/projects/` directory and moves the matching key in `~/.claude.json`, backing the latter up first and validating before swapping it in. **Caveat:** if the currently-running session was itself launched from the old path, it stays pinned to the old project path in memory until it ends — that one session's own transcript keeps writing to the old location regardless; only a fresh session started from the new path picks up the migrated history.
 2. **Create an independent copy at that destination.** Run `${CLAUDE_SKILL_DIR}/scripts/init-extraction.sh <source-repo> <dest-dir>` — it clones the private repo into the new location and refuses to run if the destination already exists or is nested inside/around the source. Every step from here on targets `<dest-dir>`; the original private repo is never touched.
 3. **Scan for secrets, credentials, and PII — in history, not just the working tree.** Run `${CLAUDE_SKILL_DIR}/scripts/scan-secrets.sh <dest-dir>` — it runs gitleaks/trufflehog if installed, plus a pattern-based fallback (key-shaped strings, internal hostnames, Slack/Jira/Linear links) across full git history and the working tree, and checks for a LICENSE file. It exits non-zero on any finding. This is a mechanical check — run it, don't try to eyeball history manually. A finding here means a real secret was likely exposed: flag it to the user for credential rotation (see Common Mistakes) regardless of what happens to history next.
