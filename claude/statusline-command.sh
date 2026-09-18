@@ -8,6 +8,7 @@ input=$(cat)
   IFS= read -r ctx_pct
   IFS= read -r effort
   IFS= read -r worktree
+  IFS= read -r repo_url
   # Every scalar above emits exactly one line; the variable-length array must stay last.
   extra_dirs=()
   while IFS= read -r extra; do
@@ -19,10 +20,13 @@ input=$(cat)
   (.context_window.used_percentage | if . == null then "" else floor end),
   (.effort.level // ""),
   (.workspace.git_worktree | if type == "string" then . else "" end),
+  (.workspace.repo | if type == "object" and .host and .owner and .name then "https://\(.host | ascii_downcase)/\(.owner)/\(.name)" else "" end),
   ((.workspace.added_dirs // [])[]?)
 ' <<<"$input")
 repo_dir="$dir"
 worktree="${worktree##*/}"
+# The URL is embedded in an escape sequence, so control characters could break out of it.
+[[ $repo_url =~ [[:cntrl:]] ]] && repo_url=""
 
 RESET=$'\033[0m'
 BOLD=$'\033[1m'
@@ -38,7 +42,7 @@ C_CRITICAL=$'\033[38;5;160m'
 C_MUTED=$'\033[38;5;244m'
 C_BAR_EMPTY=$'\033[38;5;240m'
 
-GIT_ICON=$'\xef\x84\xa6'
+BRANCH_ICON=$'\xef\x84\xa6'
 BAR_WIDTH=8
 
 # Collapse $HOME to ~ (the tilde must be escaped: bash tilde-expands an
@@ -93,7 +97,7 @@ git_add() {
 }
 
 git_segment() {
-  local porcelain head oid ahead behind staged modified untracked conflicted label
+  local porcelain head oid ahead behind staged modified untracked conflicted label repo_host remote_icon link_open="" link_close=""
   # --no-optional-locks: don't contend for index.lock with git commands Claude runs.
   porcelain=$(git --no-optional-locks -C "$1" status --porcelain=v2 --branch 2>/dev/null) || return
   read -r head oid ahead behind staged modified untracked conflicted < <(awk '
@@ -112,8 +116,25 @@ git_segment() {
     label="$head"
     (( ${#label} > 32 )) && label="${label:0:12}…${label:0-12}"
   fi
-  git_colored="${C_CLEAN}${GIT_ICON} ${label}"
-  git_w=$(( 2 + ${#label} ))
+  if [[ -n $repo_url ]]; then
+    link_open=$'\033]8;;'"${repo_url}"$'\033\\'
+    link_close=$'\033]8;;\033\\'
+  fi
+
+  # Same icons and domain matching as p10k's VCS_GIT_REMOTE_ICONS in nerdfont-v3 mode;
+  # any other remote, or none, gets the generic git icon.
+  repo_host="${repo_url#https://}"
+  repo_host="${repo_host%%/*}"
+  case $repo_host in
+    github.com|*.github.com) remote_icon=$'\xef\x84\x93' ;;
+    gitlab.com|*.gitlab.com) remote_icon=$'\xef\x8a\x96' ;;
+    bitbucket.org|*.bitbucket.org) remote_icon=$'\xee\x9c\x83' ;;
+    dev.azure.com|*.dev.azure.com|visualstudio.com|*.visualstudio.com) remote_icon=$'\xee\xaf\xa8' ;;
+    *) remote_icon=$'\xef\x87\x93' ;;
+  esac
+
+  git_colored="${C_CLEAN}${link_open}${remote_icon} ${BRANCH_ICON} ${label}${link_close}"
+  git_w=$(( 4 + ${#label} ))
 
   (( ahead ))      && git_add "$C_CLEAN" "⇡" "$ahead"
   (( behind ))     && git_add "$C_CLEAN" "⇣" "$behind"
