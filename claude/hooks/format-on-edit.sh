@@ -11,7 +11,7 @@ f=$(jq -r '.tool_input.file_path // .tool_input.notebook_path // empty')
 [ -f "$f" ] || exit 0
 
 truncate_out() {
-  head -c 3000
+  head -n 40
 }
 
 decision=""
@@ -21,9 +21,9 @@ case "$f" in
   *.py|*.pyi|*.ipynb)
     command -v uvx >/dev/null 2>&1 || exit 0
     before=$(cat "$f" 2>/dev/null)
-    check_out=$(uvx ruff check --fix "$f" 2>&1)
+    check_out=$(uvx ruff check --fix --force-exclude "$f" 2>&1)
     check_status=$?
-    uvx ruff format "$f" >/dev/null 2>&1
+    uvx ruff format --force-exclude "$f" >/dev/null 2>&1
     after=$(cat "$f" 2>/dev/null)
 
     if [ "$check_status" != "0" ]; then
@@ -38,8 +38,18 @@ $(printf '%s' "$check_out" | truncate_out)"
     export NVM_DIR="$HOME/.nvm"
     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
     command -v npx >/dev/null 2>&1 || exit 0
+
+    # Biome resolves config and its binary from cwd; anchor to the nearest biome config like ruff does.
+    dir=$(dirname "$f")
+    while [ "$dir" != "/" ] && [ ! -f "$dir/biome.json" ] && [ ! -f "$dir/biome.jsonc" ]; do
+      dir=$(dirname "$dir")
+    done
+    if [ -f "$dir/biome.json" ] || [ -f "$dir/biome.jsonc" ]; then
+      cd "$dir" || exit 0
+    fi
+
     before=$(cat "$f" 2>/dev/null)
-    biome_out=$(npx --no-install @biomejs/biome check --write "$f" 2>&1)
+    biome_out=$(npx --no-install @biomejs/biome check --write --no-errors-on-unmatched "$f" 2>&1)
     biome_status=$?
     after=$(cat "$f" 2>/dev/null)
 
