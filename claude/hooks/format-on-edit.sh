@@ -1,27 +1,15 @@
 #!/usr/bin/env bash
-# PostToolUse hook (Write|Edit|MultiEdit|NotebookEdit): auto-format the
-# touched file with ruff (Python) or biome (JS/TS), then tell Claude about
-# it -- but only when there's something worth saying.
-#
-# Silent on a clean pass (nothing changed, nothing unfixable): injecting
-# "formatted cleanly" on every edit would just permanently bloat every
-# future --resume/--continue transcript for no benefit.
-#
-# Two cases are worth surfacing, and they use different channels:
-#   - Unfixable lint errors remain -> decision:block + reason. This is
-#     corrective: it should push Claude to actually address it, not just
-#     mention it in passing (community consensus on PostToolUse hooks;
-#     see e.g. disler/claude-code-hooks-mastery).
-#   - The formatter silently rewrote the file -> additionalContext. This
-#     is informational only (Claude's in-memory copy of the file is now
-#     stale), nothing to fix, so it doesn't need the "block" treatment.
+# PostToolUse hook: auto-format edited files (ruff for Python, biome for JS/TS).
+# Output back to Claude is conditional:
+#   - unfixable lint errors remain -> decision:block with the tool output
+#   - formatter rewrote the file   -> additionalContext (informational)
+#   - otherwise                    -> silent
 set -uo pipefail
 
 f=$(jq -r '.tool_input.file_path // .tool_input.notebook_path // empty')
 [ -z "$f" ] && exit 0
 [ -f "$f" ] || exit 0
 
-# Trims noisy tool output to a size sane for a context message.
 truncate_out() {
   head -c 3000
 }
@@ -55,9 +43,7 @@ $(printf '%s' "$check_out" | truncate_out)"
     biome_status=$?
     after=$(cat "$f" 2>/dev/null)
 
-    # npx/npm plumbing failures (package not cached, no network, etc.)
-    # aren't lint findings -- stay silent rather than confusing Claude
-    # with tooling noise it can't do anything about.
+    # npx failing to resolve biome (not cached, offline) is not a lint finding.
     if printf '%s' "$biome_out" | grep -q '^npm error'; then
       exit 0
     fi
