@@ -1,12 +1,45 @@
 #!/bin/bash
-# Status line converted from ~/.bashrc's colored PS1:
-#   PS1='${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
-# Extended with model name and width-aware path shrinking.
+# Palette and segment style follow the Powerlevel10k lean prompt in zsh/.p10k.zsh.
+# Written for bash 3.2 (macOS /bin/bash): no \u escapes, no locale-dependent substrings.
 input=$(cat)
-dir=$(echo "$input" | grep -o '"current_dir"[[:space:]]*:[[:space:]]*"[^"]*"' | sed -E 's/.*:[[:space:]]*"(.*)"/\1/')
-model=$(echo "$input" | grep -o '"display_name"[[:space:]]*:[[:space:]]*"[^"]*"' | sed -E 's/.*:[[:space:]]*"(.*)"/\1/')
-user=$(whoami)
-host=$(hostname -s)
+{
+  IFS= read -r dir
+  IFS= read -r model
+  IFS= read -r ctx_pct
+  IFS= read -r effort
+  IFS= read -r worktree
+  # Every scalar above emits exactly one line; the variable-length array must stay last.
+  extra_dirs=()
+  while IFS= read -r extra; do
+    [[ -n $extra ]] && extra_dirs+=("$extra")
+  done
+} < <(jq -r '
+  (.workspace.current_dir // .cwd // ""),
+  (.model.display_name // ""),
+  (.context_window.used_percentage | if . == null then "" else floor end),
+  (.effort.level // ""),
+  (.workspace.git_worktree | if type == "string" then . else "" end),
+  ((.workspace.added_dirs // [])[]?)
+' <<<"$input")
+repo_dir="$dir"
+worktree="${worktree##*/}"
+
+RESET=$'\033[0m'
+BOLD=$'\033[1m'
+C_CONTEXT=$'\033[38;5;180m'
+C_ROOT=$'\033[1;38;5;178m'
+C_DIR=$'\033[38;5;31m'
+C_ANCHOR=$'\033[38;5;39m'
+C_CLEAN=$'\033[38;5;76m'
+C_MODIFIED=$'\033[38;5;178m'
+C_UNTRACKED=$'\033[38;5;39m'
+C_CONFLICT=$'\033[38;5;196m'
+C_CRITICAL=$'\033[38;5;160m'
+C_MUTED=$'\033[38;5;244m'
+C_BAR_EMPTY=$'\033[38;5;240m'
+
+GIT_ICON=$'\xef\x84\xa6'
+BAR_WIDTH=8
 
 # Collapse $HOME to ~ (the tilde must be escaped: bash tilde-expands an
 # unescaped ~ in the replacement text back into $HOME, silently undoing this).
@@ -51,10 +84,145 @@ shrink_path() {
   printf '%s/…/…%s' "$prefix" "${last:0-avail}"
 }
 
+# Segment widths are tracked as integers because ${#str} counts bytes, not
+# columns, when the locale isn't UTF-8.
+git_colored="" git_w=0
+git_add() {
+  git_colored+=" $1$2$3"
+  git_w=$(( git_w + 2 + ${#3} ))
+}
+
+git_segment() {
+  local porcelain head oid ahead behind staged modified untracked conflicted label
+  # --no-optional-locks: don't contend for index.lock with git commands Claude runs.
+  porcelain=$(git --no-optional-locks -C "$1" status --porcelain=v2 --branch 2>/dev/null) || return
+  read -r head oid ahead behind staged modified untracked conflicted < <(awk '
+    /^# branch.oid/  { oid = substr($3, 1, 8) }
+    /^# branch.head/ { head = $3 }
+    /^# branch.ab/   { ahead = substr($3, 2); behind = substr($4, 2) }
+    /^[12] /         { if (substr($2, 1, 1) != ".") staged++; if (substr($2, 2, 1) != ".") modified++ }
+    /^u /            { conflicted++ }
+    /^\? /           { untracked++ }
+    END { print head, oid, ahead + 0, behind + 0, staged + 0, modified + 0, untracked + 0, conflicted + 0 }
+  ' <<<"$porcelain")
+
+  if [[ $head == "(detached)" ]]; then
+    label="@$oid"
+  else
+    label="$head"
+    (( ${#label} > 32 )) && label="${label:0:12}…${label:0-12}"
+  fi
+  git_colored="${C_CLEAN}${GIT_ICON} ${label}"
+  git_w=$(( 2 + ${#label} ))
+
+  (( ahead ))      && git_add "$C_CLEAN" "⇡" "$ahead"
+  (( behind ))     && git_add "$C_CLEAN" "⇣" "$behind"
+  (( conflicted )) && git_add "$C_CONFLICT" "~" "$conflicted"
+  (( staged ))     && git_add "$C_CLEAN" "+" "$staged"
+  (( modified ))   && git_add "$C_MODIFIED" "!" "$modified"
+  (( untracked ))  && git_add "$C_UNTRACKED" "?" "$untracked"
+}
+
+ctx_colored="" ctx_w=0
+ctx_segment() {
+  [[ -n $ctx_pct ]] || return
+  local color=$C_CLEAN filled=$(( (ctx_pct * BAR_WIDTH + 50) / 100 )) i on="" off=""
+  if (( ctx_pct >= 90 )); then
+    color=$C_CRITICAL
+  elif (( ctx_pct >= 70 )); then
+    color=$C_MODIFIED
+  fi
+  (( filled > BAR_WIDTH )) && filled=$BAR_WIDTH
+  for (( i=0; i<BAR_WIDTH; i++ )); do
+    if (( i < filled )); then on+="█"; else off+="░"; fi
+  done
+  ctx_colored="${color}${on}${C_BAR_EMPTY}${off}${color} ${ctx_pct}%"
+  ctx_w=$(( BAR_WIDTH + 2 + ${#ctx_pct} ))
+}
+
+git_segment "$repo_dir"
+ctx_segment
+
+# Like p10k's context segment: shown only as root or over SSH.
+user_host="" c_user_host=$C_CONTEXT
+if (( EUID == 0 )); then
+  user_host="$(whoami)@$(hostname -s)" c_user_host=$C_ROOT
+elif [[ -n ${SSH_CONNECTION:-}${SSH_TTY:-} ]]; then
+  user_host="$(whoami)@$(hostname -s)"
+fi
+
 cols=${COLUMNS:-80}
-fixed="${user}@${host}: [${model}]"
-budget=$(( cols - ${#fixed} - 1 ))
+[[ -n $model ]] || effort=""
+# Drop the least useful segments (effort, worktree tag, model, then user@host)
+# until the path gets a workable share of the width.
+while :; do
+  fixed=0
+  [[ -n $model ]] && fixed=$(( fixed + 1 + ${#model} ))
+  [[ -n $effort ]] && fixed=$(( fixed + 1 + ${#effort} ))
+  [[ -n $worktree ]] && fixed=$(( fixed + 4 + ${#worktree} ))
+  [[ -n $user_host ]] && fixed=$(( fixed + ${#user_host} + 1 ))
+  (( git_w )) && fixed=$(( fixed + 1 + git_w ))
+  (( ctx_w )) && fixed=$(( fixed + 1 + ctx_w ))
+  budget=$(( cols - fixed - 2 ))
+  (( budget >= 12 )) && break
+  if [[ -n $effort ]]; then effort=""
+  elif [[ -n $worktree ]]; then worktree=""
+  elif [[ -n $model ]]; then model=""
+  elif [[ -n $user_host ]]; then user_host=""
+  else break; fi
+done
 (( budget < 8 )) && budget=8
 dir=$(shrink_path "$dir" "$budget")
 
-printf '\033[01;32m%s@%s\033[00m:\033[01;34m%s\033[00m \033[02m[%s]\033[00m' "$user" "$host" "$dir" "$model"
+dir_head="" dir_last="$dir"
+if [[ $dir == */* ]]; then
+  dir_head="${dir%/*}/"
+  dir_last="${dir##*/}"
+fi
+
+line=""
+[[ -n $user_host ]] && line+="${c_user_host}${user_host}${RESET} "
+line+="${C_DIR}${dir_head}${BOLD}${C_ANCHOR}${dir_last}${RESET}"
+[[ -n $git_colored ]] && line+=" ${git_colored}${RESET}"
+[[ -n $worktree ]] && line+=" ${C_MUTED}wt:${worktree}${RESET}"
+[[ -n $ctx_colored ]] && line+=" ${ctx_colored}${RESET}"
+if [[ -n $model ]]; then
+  line+=" ${C_MUTED}${model}"
+  [[ -n $effort ]] && line+=" ${effort}"
+  line+="${RESET}"
+fi
+
+extra_n=${#extra_dirs[@]}
+if (( extra_n )); then
+  extra_avail=$(( cols - 4 ))
+  extra_total=$(( 2 * (extra_n - 1) ))
+  for (( i=0; i<extra_n; i++ )); do
+    extra_dirs[i]="${extra_dirs[i]/#$HOME/\~}"
+    extra_total=$(( extra_total + ${#extra_dirs[i]} ))
+  done
+
+  extra_shown=$extra_n extra_more="" extra_share=$extra_avail
+  if (( extra_total > extra_avail )); then
+    # Each shown path gets an equal share of the row; fewer paths are shown,
+    # followed by a "+N more" count, until the share reaches 12 columns.
+    while :; do
+      extra_more="" reserve=0
+      if (( extra_shown < extra_n )); then
+        extra_more="+$(( extra_n - extra_shown )) more"
+        reserve=$(( 2 + ${#extra_more} ))
+      fi
+      extra_share=$(( (extra_avail - 2 * (extra_shown - 1) - reserve) / extra_shown ))
+      (( extra_share >= 12 || extra_shown == 1 )) && break
+      extra_shown=$(( extra_shown - 1 ))
+    done
+    (( extra_share < 12 )) && extra_share=12
+  fi
+
+  line+=$'\n'"${C_MUTED}+ ${RESET}"
+  for (( i=0; i<extra_shown; i++ )); do
+    (( i )) && line+="  "
+    line+="${C_DIR}$(shrink_path "${extra_dirs[i]}" "$extra_share")${RESET}"
+  done
+  [[ -n $extra_more ]] && line+="  ${C_MUTED}${extra_more}${RESET}"
+fi
+printf '%s' "$line"

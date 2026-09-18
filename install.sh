@@ -6,7 +6,7 @@
 # to only preview.
 set -euo pipefail
 
-for cmd in git python3; do
+for cmd in git python3 jq; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
     echo "install.sh needs '$cmd' on PATH - see README.md#prerequisites." >&2
     exit 1
