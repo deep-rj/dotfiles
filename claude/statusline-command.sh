@@ -1,6 +1,7 @@
 #!/bin/bash
 # Palette and segment style follow the Powerlevel10k lean prompt in zsh/.p10k.zsh.
-# Written for bash 3.2 (macOS /bin/bash): no \u escapes, no locale-dependent substrings.
+# Written for bash 3.2 (macOS /bin/bash): no \u escapes, glyph widths tracked as integers.
+# Slicing of paths and branch names assumes a UTF-8 locale.
 input=$(cat)
 {
   IFS= read -r dir
@@ -20,7 +21,7 @@ input=$(cat)
   (.context_window.used_percentage | if . == null then "" else floor end),
   (.effort.level // ""),
   (.workspace.git_worktree | if type == "string" then . else "" end),
-  (.workspace.repo | if type == "object" and .host and .owner and .name then "https://\(.host | ascii_downcase)/\(.owner)/\(.name)" else "" end),
+  (.workspace.repo | if type == "object" and ([.host, .owner, .name] | all(type == "string")) then "https://\(.host | ascii_downcase)/\(.owner)/\(.name)" else "" end),
   ((.workspace.added_dirs // [])[]?)
 ' <<<"$input")
 repo_dir="$dir"
@@ -45,9 +46,14 @@ C_BAR_EMPTY=$'\033[38;5;240m'
 BRANCH_ICON=$'\xef\x84\xa6'
 BAR_WIDTH=8
 
-# Collapse $HOME to ~ (the tilde must be escaped: bash tilde-expands an
-# unescaped ~ in the replacement text back into $HOME, silently undoing this).
-dir="${dir/#$HOME/\~}"
+# Collapse $HOME to ~ only at a path boundary, so /home/user-old stays intact.
+# Result is returned in REPLY; a command substitution would fork.
+collapse_home() {
+  REPLY=$1
+  [[ -n $HOME && ( $1 == "$HOME" || $1 == "$HOME"/* ) ]] && REPLY="~${1#"$HOME"}"
+}
+collapse_home "$dir"
+dir=$REPLY
 
 # Shrink a path to fit within $budget columns: first collapse middle
 # segments to their initial letter, then drop them entirely, then as a
@@ -218,7 +224,8 @@ if (( extra_n )); then
   extra_avail=$(( cols - 4 ))
   extra_total=$(( 2 * (extra_n - 1) ))
   for (( i=0; i<extra_n; i++ )); do
-    extra_dirs[i]="${extra_dirs[i]/#$HOME/\~}"
+    collapse_home "${extra_dirs[i]}"
+    extra_dirs[i]=$REPLY
     extra_total=$(( extra_total + ${#extra_dirs[i]} ))
   done
 
