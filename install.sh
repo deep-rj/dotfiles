@@ -37,6 +37,14 @@ for arg in "$@"; do
   esac
 done
 
+if command -v zsh >/dev/null 2>&1; then
+  HAS_ZSH=true
+else
+  HAS_ZSH=false
+fi
+
+# Only used when HAS_ZSH; loops over it are guarded rather than emptying it,
+# since "${arr[@]}" on an empty array trips set -u in bash 3.2 (macOS).
 CLONES=(
   "https://github.com/ohmyzsh/ohmyzsh.git|$HOME/.oh-my-zsh"
   "https://github.com/zsh-users/zsh-autosuggestions|$ZSH_CUSTOM/plugins/zsh-autosuggestions"
@@ -44,8 +52,6 @@ CLONES=(
   "https://github.com/romkatv/powerlevel10k.git|$ZSH_CUSTOM/themes/powerlevel10k"
 )
 LINKS=(
-  "$DOTFILES_DIR/zsh/.zshrc|$HOME/.zshrc"
-  "$DOTFILES_DIR/zsh/.p10k.zsh|$HOME/.p10k.zsh"
   "$DOTFILES_DIR/bash/.bashrc|$HOME/.bashrc"
   "$DOTFILES_DIR/git/.gitconfig|$HOME/.gitconfig"
   "$DOTFILES_DIR/claude/statusline-command.sh|$HOME/.claude/statusline-command.sh"
@@ -53,6 +59,13 @@ LINKS=(
   "$DOTFILES_DIR/claude/CLAUDE.md|$HOME/.claude/CLAUDE.md"
   "$DOTFILES_DIR/claude/skills/extract-public-repo|$HOME/.claude/skills/extract-public-repo"
 )
+if $HAS_ZSH; then
+  LINKS=(
+    "$DOTFILES_DIR/zsh/.zshrc|$HOME/.zshrc"
+    "$DOTFILES_DIR/zsh/.p10k.zsh|$HOME/.p10k.zsh"
+    "${LINKS[@]}"
+  )
+fi
 SETTINGS_SNIPPET="$DOTFILES_DIR/claude/settings.snippet.json"
 SETTINGS_FILE="$HOME/.claude/settings.json"
 
@@ -60,13 +73,17 @@ any_changes=false
 
 echo "== Plan =="
 
-for entry in "${CLONES[@]}"; do
-  dest="${entry#*|}"
-  if [ ! -d "$dest" ]; then
-    echo "  + clone $dest"
-    any_changes=true
-  fi
-done
+if $HAS_ZSH; then
+  for entry in "${CLONES[@]}"; do
+    dest="${entry#*|}"
+    if [ ! -d "$dest" ]; then
+      echo "  + clone $dest"
+      any_changes=true
+    fi
+  done
+else
+  echo "  - zsh not found: skipping Oh My Zsh, its plugins/theme, .zshrc and .p10k.zsh (re-run after installing zsh)"
+fi
 
 for entry in "${LINKS[@]}"; do
   src="${entry%%|*}"
@@ -120,13 +137,15 @@ fi
 
 echo "== Applying =="
 
-for entry in "${CLONES[@]}"; do
-  repo="${entry%%|*}"
-  dest="${entry#*|}"
-  if [ ! -d "$dest" ]; then
-    git clone --depth=1 "$repo" "$dest"
-  fi
-done
+if $HAS_ZSH; then
+  for entry in "${CLONES[@]}"; do
+    repo="${entry%%|*}"
+    dest="${entry#*|}"
+    if [ ! -d "$dest" ]; then
+      git clone --depth=1 "$repo" "$dest"
+    fi
+  done
+fi
 
 link() {
   local src="$1" dest="$2"
@@ -150,4 +169,8 @@ done
 echo "Merging Claude Code settings.json..."
 python3 "$DOTFILES_DIR/claude/merge_settings.py" "$SETTINGS_SNIPPET" "$SETTINGS_FILE" --apply || true
 
-echo "Done. Start a new shell (or 'exec zsh') to pick up the changes."
+if $HAS_ZSH; then
+  echo "Done. Start a new shell (or 'exec zsh') to pick up the changes."
+else
+  echo "Done. Start a new shell (or 'exec bash') to pick up the changes."
+fi

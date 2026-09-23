@@ -17,7 +17,7 @@ breaking the bootstrap.
 | `bash` | running `install.sh` | yes | preinstalled almost everywhere |
 | `python3` | the settings.json merge (`claude/merge_settings.py`) | yes | Linux: `apt install python3`; macOS: `xcode-select --install` or `brew install python3` |
 | `jq` | Claude Code's status line and PostToolUse hook (reading their JSON input) and the `extract-public-repo` skill's `migrate-claude-metadata.sh` | yes | `apt install jq` / `brew install jq` |
-| `zsh` | actually using `.zshrc` (Oh My Zsh, Powerlevel10k) | no — `.bashrc` is tracked as a fallback | `apt install zsh` / `brew install zsh` |
+| `zsh` | actually using `.zshrc` (Oh My Zsh, Powerlevel10k) | no — without it `install.sh` skips all zsh setup and `.bashrc` is the fallback; re-run after installing zsh | `apt install zsh` / `brew install zsh` |
 | A [Nerd Font](https://www.nerdfonts.com/) in the terminal | the git-branch and remote-service icons in the Claude Code status line, and Powerlevel10k's glyphs | no — the icon renders as a missing-glyph box without it | https://github.com/romkatv/powerlevel10k#fonts |
 | `uv` (for `uvx`) | the hook's Python auto-fix/format (ruff), and running `git-filter-repo` on demand (via `uvx --from git-filter-repo git-filter-repo`) in the `extract-public-repo` skill | no | https://docs.astral.sh/uv/getting-started/installation/ |
 | `nvm` + Node (for `npx`) | the hook's JS/TS auto-fix/format (biome) | no | https://github.com/nvm-sh/nvm#install--update-script |
@@ -31,9 +31,10 @@ breaking the bootstrap.
 git clone git@github.com:deep-rj/dotfiles.git ~/dotfiles && ~/dotfiles/install.sh
 ```
 
-Safe to re-run — `install.sh` is idempotent. It installs Oh My Zsh and its
-third-party plugins/theme if missing, symlinks the tracked config files into
-`$HOME`, and deep-merges `claude/settings.snippet.json` into
+Safe to re-run — `install.sh` is idempotent. If `zsh` is on PATH, it installs
+Oh My Zsh and its third-party plugins/theme if missing; otherwise it skips
+them along with `.zshrc` and `.p10k.zsh`. It symlinks the tracked config
+files into `$HOME`, and deep-merges `claude/settings.snippet.json` into
 `~/.claude/settings.json` key by key. Every run starts by printing a plan
 (new symlinks, diffs for files that already exist with different content,
 and settings.json additions/conflicts) before touching anything. If a key
