@@ -1,5 +1,2 @@
 [credential]
 	helper = store
-# One stored token per repository instead of one per host.
-[credential "https://github.com"]
-	useHttpPath = true
