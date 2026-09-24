@@ -43,6 +43,9 @@ that settings.snippet.json wants already exists locally with a different value
 reported as a conflict instead of being silently overwritten — reconcile it
 by hand or update `settings.snippet.json` to match.
 
+`--profile <name>` also applies a machine-specific profile (see
+[Profiles](#profiles)); without it, the profile already installed is kept.
+
 If there's nothing to do, it says so and exits. Otherwise, when run from a
 terminal it shows the plan and asks for confirmation; pass `--yes` to apply
 without asking (e.g. unattended pod provisioning) or `--dry-run` to only
@@ -55,6 +58,26 @@ files land there under their original relative path (e.g.
 automatically; once you've confirmed you don't need an old version, it's
 safe to delete its backup directory.
 
+## Profiles
+
+The tracked shell and git configs are portable and identical everywhere.
+Machine- or provider-specific settings live in `profiles/<name>/` and are
+symlinked into `~/.config/dotfiles/profile.d/`, which `.bashrc`, `.zshrc` and
+`.gitconfig` load if present. With no profile (`default`), nothing is added.
+
+```bash
+~/dotfiles/install.sh --profile runpod
+```
+
+Re-running without `--profile` keeps the installed profile; switching or
+selecting `default` removes only the old profile's symlinks.
+
+| Profile | Contents |
+|---|---|
+| `runpod` | Sources `/etc/rp_environment` (pod env vars), Hugging Face and LIBERO paths under `/workspace`, conda from `/workspace/miniconda3`, and a git credential store at `/workspace/.git-credentials` |
+
+A profile is a directory with any of `bashrc.sh`, `zshrc.sh` and `gitconfig`.
+
 ## What's tracked
 
 | Path in repo | Symlinked to | Purpose |
@@ -63,6 +86,7 @@ safe to delete its backup directory.
 | `zsh/.p10k.zsh` | `~/.p10k.zsh` | Powerlevel10k prompt config |
 | `bash/.bashrc` | `~/.bashrc` | Bash fallback for shells/images without zsh |
 | `git/.gitconfig` | `~/.gitconfig` | Git identity |
+| `profiles/<name>/{bashrc.sh,zshrc.sh,gitconfig}` | `~/.config/dotfiles/profile.d/` | Machine-specific config for the selected profile |
 | `claude/statusline-command.sh` | `~/.claude/statusline-command.sh` | Claude Code status line: `user@host` (only as root or over SSH, like the p10k context segment), path, git branch and state (`⇡⇣ ~ + ! ?`) led by a remote-service icon (GitHub, GitLab, Bitbucket, Azure, else generic git, as in p10k) with the icon and branch linking to the remote repo, a `wt:<name>` tag inside a linked git worktree, context-usage bar, model with effort level. A second row lists directories added with `/add-dir` (absent when there are none). Styled after the Powerlevel10k prompt in `zsh/.p10k.zsh`; on narrow terminals drops effort, then the worktree tag, then the model, then `user@host` |
 | `claude/settings.snippet.json` | merged into `~/.claude/settings.json` | Registers the status line command, ruff (Python) and biome (JS/TS) auto-fix/format hooks, and attribution suppression |
 | `claude/CLAUDE.md` | `~/.claude/CLAUDE.md` | Global Claude Code instructions (all projects) |

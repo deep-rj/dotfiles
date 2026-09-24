@@ -3,3 +3,6 @@
 	email = 22083737+deep-rj@users.noreply.github.com
 [init]
 	defaultBranch = main
+# Machine-specific config linked in by `install.sh --profile`; ignored if absent.
+[include]
+	path = ~/.config/dotfiles/profile.d/gitconfig

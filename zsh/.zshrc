@@ -114,22 +114,12 @@ source $ZSH/oh-my-zsh.sh
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
 export PATH="$HOME/.local/bin:$PATH"
 
-# >>> conda initialize >>>
-# !! Contents within this block are managed by 'conda init' !!
-__conda_setup="$('/home/rohanjha/miniconda3/bin/conda' 'shell.zsh' 'hook' 2> /dev/null)"
-if [ $? -eq 0 ]; then
-    eval "$__conda_setup"
-else
-    if [ -f "/home/rohanjha/miniconda3/etc/profile.d/conda.sh" ]; then
-        . "/home/rohanjha/miniconda3/etc/profile.d/conda.sh"
-    else
-        export PATH="/home/rohanjha/miniconda3/bin:$PATH"
-    fi
-fi
-unset __conda_setup
-# <<< conda initialize <<<
+[ -x "$HOME/miniconda3/bin/conda" ] && eval "$("$HOME/miniconda3/bin/conda" shell.zsh hook)"
 
 
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+
+# Machine-specific config linked in by `install.sh --profile`.
+[[ ! -r ~/.config/dotfiles/profile.d/zshrc.sh ]] || source ~/.config/dotfiles/profile.d/zshrc.sh

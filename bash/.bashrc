@@ -115,3 +115,13 @@ if ! shopt -oq posix; then
     . /etc/bash_completion
   fi
 fi
+
+case ":$PATH:" in
+    *":$HOME/.local/bin:"*) ;;
+    *) export PATH="$HOME/.local/bin:$PATH" ;;
+esac
+
+# Machine-specific config linked in by `install.sh --profile`.
+if [ -r "$HOME/.config/dotfiles/profile.d/bashrc.sh" ]; then
+    . "$HOME/.config/dotfiles/profile.d/bashrc.sh"
+fi
