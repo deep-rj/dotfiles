@@ -74,7 +74,7 @@ selecting `default` removes only the old profile's symlinks.
 
 | Profile | Contents |
 |---|---|
-| `runpod` | Sources `/etc/rp_environment` (pod env vars), Hugging Face and LIBERO paths under `/workspace`, conda from `/workspace/miniconda3`, and git's credential store. Keeps Claude Code state (`~/.claude/` and `~/.claude.json`: sessions, history, memory, login, plugins, project trust) and `~/.git-credentials` on the network volume under `/workspace/.home`, and installs Claude Code if missing |
+| `runpod` | Sources `/etc/rp_environment` (pod env vars), Hugging Face and LIBERO paths under `/workspace`, conda from `/workspace/miniconda3`, and git's credential store with one token per GitHub repository. Keeps Claude Code state (`~/.claude/` and `~/.claude.json`: sessions, history, memory, login, plugins, project trust) and `~/.git-credentials` on the network volume under `/workspace/.home`, and installs Claude Code if missing |
 
 A profile is a directory with any of `bashrc.sh`, `zshrc.sh`, `gitconfig` and
 `install-options.sh`. `install-options.sh` is read by `install.sh` and can set:
