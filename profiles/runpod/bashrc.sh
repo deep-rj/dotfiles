@@ -6,9 +6,6 @@ if [ -r /etc/rp_environment ]; then
     unset _dotfiles_path
 fi
 
-export HF_HOME=/workspace/hf_cache
-export LIBERO_CONFIG_PATH=/workspace/.libero
-
 if [ -x /workspace/miniconda3/bin/conda ]; then
     eval "$(/workspace/miniconda3/bin/conda shell.bash hook)"
 fi
