@@ -5,6 +5,7 @@ PERSIST_PATHS=(
   .claude/
   .claude.json
   .git-credentials
+  .cache/huggingface/
 )
 
 INSTALL_CLAUDE=true
