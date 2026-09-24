@@ -23,7 +23,7 @@ breaking the bootstrap.
 | `nvm` + Node (for `npx`) | the hook's JS/TS auto-fix/format (biome) | no | https://github.com/nvm-sh/nvm#install--update-script |
 | `gitleaks` | the `extract-public-repo` skill's secret scan | no — scan falls back to weaker pattern matching without it | `apt install gitleaks` / see https://github.com/gitleaks/gitleaks#installing |
 | `trufflehog` | the `extract-public-repo` skill's secret scan (verified-live-credential detection) | no — scan skips this pass without it | https://github.com/trufflesecurity/trufflehog#installation |
-| [Claude Code](https://claude.com/product/claude-code) | `statusLine`/hooks/`CLAUDE.md`/skills to have any effect | no — shell/git config works standalone | see their install docs |
+| [Claude Code](https://claude.com/product/claude-code) | `statusLine`/hooks/`CLAUDE.md`/skills to have any effect | no — shell/git config works standalone | see their install docs; profiles can opt in to `install.sh` installing it (see [Profiles](#profiles)) |
 
 ## Bootstrap
 
@@ -74,9 +74,30 @@ selecting `default` removes only the old profile's symlinks.
 
 | Profile | Contents |
 |---|---|
-| `runpod` | Sources `/etc/rp_environment` (pod env vars), Hugging Face and LIBERO paths under `/workspace`, conda from `/workspace/miniconda3`, and a git credential store at `/workspace/.git-credentials` |
+| `runpod` | Sources `/etc/rp_environment` (pod env vars), Hugging Face and LIBERO paths under `/workspace`, conda from `/workspace/miniconda3`, and git's credential store. Keeps Claude Code state (`~/.claude/` and `~/.claude.json`: sessions, history, memory, login, plugins, project trust) and `~/.git-credentials` on the network volume under `/workspace/.home`, and installs Claude Code if missing |
 
-A profile is a directory with any of `bashrc.sh`, `zshrc.sh` and `gitconfig`.
+A profile is a directory with any of `bashrc.sh`, `zshrc.sh`, `gitconfig` and
+`install-options.sh`. `install-options.sh` is read by `install.sh` and can set:
+
+- `INSTALL_CLAUDE=true` to install Claude Code with the official native
+  installer when `claude` isn't already installed. Needs `curl`; a failed
+  download is reported without stopping the rest of the install.
+- `PERSIST_DIR` and `PERSIST_PATHS` (paths relative to `$HOME`, directories
+  with a trailing `/`) for state that must survive the machine being
+  recreated.
+
+For each persisted path, `install.sh` does one of the following:
+
+- **No copy in `PERSIST_DIR` yet:** moves the local copy there and symlinks it back.
+- **Copy already in `PERSIST_DIR` (e.g. a fresh pod):** symlinks to it, first
+  backing up any local copy as described in [Bootstrap](#bootstrap).
+- **Parent of `PERSIST_DIR` missing (e.g. the volume isn't mounted):** skips
+  the path rather than putting it on ephemeral disk.
+
+Quit Claude Code before the run that first moves `~/.claude`. Switching
+profiles leaves persisted paths in place. Persisted state can include
+credentials such as `~/.claude/.credentials.json`, so `PERSIST_DIR` must be
+private storage; `install.sh` creates it readable only by you.
 
 ## What's tracked
 
@@ -87,6 +108,7 @@ A profile is a directory with any of `bashrc.sh`, `zshrc.sh` and `gitconfig`.
 | `bash/.bashrc` | `~/.bashrc` | Bash fallback for shells/images without zsh |
 | `git/.gitconfig` | `~/.gitconfig` | Git identity |
 | `profiles/<name>/{bashrc.sh,zshrc.sh,gitconfig}` | `~/.config/dotfiles/profile.d/` | Machine-specific config for the selected profile |
+| `profiles/<name>/install-options.sh` | read by `install.sh` | The profile's persistent `$HOME` paths and whether to install Claude Code |
 | `claude/statusline-command.sh` | `~/.claude/statusline-command.sh` | Claude Code status line: `user@host` (only as root or over SSH, like the p10k context segment), path, git branch and state (`⇡⇣ ~ + ! ?`) led by a remote-service icon (GitHub, GitLab, Bitbucket, Azure, else generic git, as in p10k) with the icon and branch linking to the remote repo, a `wt:<name>` tag inside a linked git worktree, context-usage bar, model with effort level. A second row lists directories added with `/add-dir` (absent when there are none). Styled after the Powerlevel10k prompt in `zsh/.p10k.zsh`; on narrow terminals drops effort, then the worktree tag, then the model, then `user@host` |
 | `claude/settings.snippet.json` | merged into `~/.claude/settings.json` | Registers the status line command, ruff (Python) and biome (JS/TS) auto-fix/format hooks, and attribution suppression |
 | `claude/CLAUDE.md` | `~/.claude/CLAUDE.md` | Global Claude Code instructions (all projects) |

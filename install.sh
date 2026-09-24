@@ -5,7 +5,9 @@
 # --yes to skip the prompt (e.g. unattended pod provisioning) or --dry-run
 # to only preview. --profile NAME links profiles/NAME/ (machine-specific
 # config) into ~/.config/dotfiles/profile.d/; without it the profile already
-# installed is kept, else "default" (no profile).
+# installed is kept, else "default" (no profile). A profile's
+# install-options.sh can move $HOME paths onto persistent storage (symlinked
+# back) and opt in to installing Claude Code when it's missing.
 set -euo pipefail
 
 for cmd in git python3 jq; do
@@ -74,6 +76,34 @@ if [ "$PROFILE" != default ] && [ ! -d "$DOTFILES_DIR/profiles/$PROFILE" ]; then
   exit 1
 fi
 
+PERSIST_DIR=""
+PERSIST_PATHS=()
+PERSIST_SKIPPED=""
+INSTALL_CLAUDE=false
+if [ "$PROFILE" != default ] && [ -f "$DOTFILES_DIR/profiles/$PROFILE/install-options.sh" ]; then
+  . "$DOTFILES_DIR/profiles/$PROFILE/install-options.sh"
+  # A missing parent means the volume isn't mounted; creating it would put
+  # "persistent" state on ephemeral disk.
+  if [ ! -d "$(dirname "$PERSIST_DIR")" ]; then
+    PERSIST_SKIPPED="$(dirname "$PERSIST_DIR")"
+    PERSIST_PATHS=()
+  fi
+fi
+
+# Where $1 resolves once PERSIST_PATHS are linked into PERSIST_DIR. Until a
+# path's store exists, its local copy is what gets moved there, so it stays.
+persisted_path() {
+  local p
+  for p in ${PERSIST_PATHS[@]+"${PERSIST_PATHS[@]}"}; do
+    p="${p%/}"
+    [ -e "$PERSIST_DIR/$p" ] || continue
+    case "$1" in
+      "$HOME/$p"|"$HOME/$p"/*) echo "$PERSIST_DIR/${1#"$HOME"/}"; return ;;
+    esac
+  done
+  echo "$1"
+}
+
 if command -v zsh >/dev/null 2>&1; then
   HAS_ZSH=true
 else
@@ -121,6 +151,27 @@ any_changes=false
 echo "== Plan =="
 echo "  profile: $PROFILE"
 
+if [ -n "$PERSIST_SKIPPED" ]; then
+  echo "  - $PERSIST_SKIPPED not found: skipping persistent paths (re-run once it's mounted)"
+fi
+for entry in ${PERSIST_PATHS[@]+"${PERSIST_PATHS[@]}"}; do
+  dest="$HOME/${entry%/}"
+  store="$PERSIST_DIR/${entry%/}"
+  if [ -L "$dest" ] && [ "$(readlink "$dest")" = "$store" ]; then
+    continue
+  fi
+  any_changes=true
+  if [ ! -e "$store" ] && [ -e "$dest" ] && [ ! -L "$dest" ]; then
+    echo "  + persist $dest: move to $store and link back"
+  elif [ ! -e "$store" ]; then
+    echo "  + persist $dest: link to $store (new)"
+  elif [ -e "$dest" ] || [ -L "$dest" ]; then
+    echo "  + persist $dest: link to existing $store, backing up local copy to $BACKUP_DIR/$(backup_rel "$dest") first"
+  else
+    echo "  + persist $dest: link to existing $store"
+  fi
+done
+
 if $HAS_ZSH; then
   for entry in "${CLONES[@]}"; do
     dest="${entry#*|}"
@@ -133,22 +184,34 @@ else
   echo "  - zsh not found: skipping Oh My Zsh, its plugins/theme, .zshrc and .p10k.zsh (re-run after installing zsh)"
 fi
 
+NEED_CLAUDE=false
+if $INSTALL_CLAUDE && ! command -v claude >/dev/null 2>&1 && [ ! -x "$HOME/.local/bin/claude" ]; then
+  if command -v curl >/dev/null 2>&1; then
+    echo "  + install Claude Code (official native installer)"
+    NEED_CLAUDE=true
+    any_changes=true
+  else
+    echo "  - curl not found: skipping Claude Code install (re-run after installing curl)"
+  fi
+fi
+
 for entry in "${LINKS[@]}"; do
   src="${entry%%|*}"
   dest="${entry#*|}"
-  if [ -L "$dest" ] && [ "$(readlink "$dest")" = "$src" ]; then
+  current="$(persisted_path "$dest")"
+  if [ -L "$current" ] && [ "$(readlink "$current")" = "$src" ]; then
     continue
   fi
   any_changes=true
-  if [ ! -e "$dest" ]; then
+  if [ ! -e "$current" ]; then
     echo "  + link $dest -> $src (new)"
-  elif is_profile_link "$dest"; then
-    echo "  + relink $dest -> $src (was $(readlink "$dest"))"
-  elif diff -q "$src" "$dest" >/dev/null 2>&1; then
+  elif is_profile_link "$current"; then
+    echo "  + relink $dest -> $src (was $(readlink "$current"))"
+  elif diff -q "$src" "$current" >/dev/null 2>&1; then
     echo "  + link $dest -> $src (identical content, replacing plain file with symlink)"
   else
     echo "  + link $dest -> $src, backing up existing file to $BACKUP_DIR/$(backup_rel "$dest") first:"
-    diff -u "$dest" "$src" | sed 's/^/      /' || true
+    diff -u "$current" "$src" | sed 's/^/      /' || true
   fi
 done
 
@@ -159,7 +222,7 @@ done
 
 echo "  -- settings.json --"
 settings_exit=0
-settings_output=$(python3 "$DOTFILES_DIR/claude/merge_settings.py" "$SETTINGS_SNIPPET" "$SETTINGS_FILE" 2>&1) || settings_exit=$?
+settings_output=$(python3 "$DOTFILES_DIR/claude/merge_settings.py" "$SETTINGS_SNIPPET" "$(persisted_path "$SETTINGS_FILE")" 2>&1) || settings_exit=$?
 echo "$settings_output" | sed 's/^/  /'
 if [ "$settings_exit" != "0" ]; then
   echo "  (conflicts above are left as-is; reconcile settings.snippet.json manually if you want dotfiles to own them)"
@@ -192,6 +255,44 @@ fi
 
 echo "== Applying =="
 
+backup() {
+  local backup_dest="$BACKUP_DIR/$(backup_rel "$1")"
+  mkdir -p "$(dirname "$backup_dest")"
+  mv "$1" "$backup_dest"
+  echo "Backed up existing $1 -> $backup_dest"
+}
+
+# Entries ending in / are directories, created if missing; a missing file is
+# left for its owner to create through the symlink.
+persist() {
+  local entry="$1"
+  local dest="$HOME/${entry%/}" store="$PERSIST_DIR/${entry%/}"
+  if [ -L "$dest" ] && [ "$(readlink "$dest")" = "$store" ]; then
+    return
+  fi
+  mkdir -p "$(dirname "$store")" "$(dirname "$dest")"
+  if [ ! -e "$store" ] && [ -e "$dest" ] && [ ! -L "$dest" ]; then
+    mv "$dest" "$store"
+    echo "Moved $dest -> $store"
+  else
+    if [ -e "$dest" ] || [ -L "$dest" ]; then
+      backup "$dest"
+    fi
+    if [ "$entry" != "${entry%/}" ]; then
+      mkdir -p "$store"
+    fi
+  fi
+  ln -s "$store" "$dest"
+  echo "Linked $dest -> $store"
+}
+if [ ${#PERSIST_PATHS[@]} -gt 0 ]; then
+  # Private because persisted state includes credentials.
+  (umask 077 && mkdir -p "$PERSIST_DIR")
+fi
+for entry in ${PERSIST_PATHS[@]+"${PERSIST_PATHS[@]}"}; do
+  persist "$entry"
+done
+
 if $HAS_ZSH; then
   for entry in "${CLONES[@]}"; do
     repo="${entry%%|*}"
@@ -211,10 +312,7 @@ link() {
   if is_profile_link "$dest"; then
     rm "$dest"
   elif [ -e "$dest" ] || [ -L "$dest" ]; then
-    local backup_dest="$BACKUP_DIR/$(backup_rel "$dest")"
-    mkdir -p "$(dirname "$backup_dest")"
-    mv "$dest" "$backup_dest"
-    echo "Backed up existing $dest -> $backup_dest"
+    backup "$dest"
   fi
   ln -s "$src" "$dest"
   echo "Linked $dest -> $src"
@@ -227,6 +325,12 @@ for dest in ${STALE[@]+"${STALE[@]}"}; do
   rm "$dest"
   echo "Unlinked $dest"
 done
+
+if $NEED_CLAUDE; then
+  echo "Installing Claude Code..."
+  curl -fsSL https://claude.ai/install.sh | bash ||
+    echo "Claude Code install failed; re-run install.sh to retry." >&2
+fi
 
 echo "Merging Claude Code settings.json..."
 python3 "$DOTFILES_DIR/claude/merge_settings.py" "$SETTINGS_SNIPPET" "$SETTINGS_FILE" --apply || true
