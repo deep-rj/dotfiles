@@ -28,7 +28,7 @@ breaking the bootstrap.
 ## Bootstrap
 
 ```bash
-git clone git@github.com:deep-rj/dotfiles.git ~/dotfiles && ~/dotfiles/install.sh
+git clone https://github.com/deep-rj/dotfiles.git ~/dotfiles && ~/dotfiles/install.sh
 ```
 
 Safe to re-run — `install.sh` is idempotent. If `zsh` is on PATH, it installs
@@ -74,7 +74,8 @@ selecting `default` removes only the old profile's symlinks.
 
 | Profile | Contents |
 |---|---|
-| `runpod` | Sources `/etc/rp_environment` (pod env vars), conda from `/workspace/miniconda3`, and git's credential store. Keeps Claude Code state (`~/.claude/` and `~/.claude.json`: sessions, history, memory, login, plugins, project trust), `~/.git-credentials` and the Hugging Face cache (`~/.cache/huggingface/`) on the network volume under `/workspace/.home`, and installs Claude Code if missing |
+| `runpod` | Sources `/etc/rp_environment` (pod env vars), conda from `/workspace/miniconda3`, and git's credential store. Keeps Claude Code state (`~/.claude/` and `~/.claude.json`: sessions, history, memory, login, plugins, project trust), `~/.git-credentials` and the Hugging Face cache (`~/.cache/huggingface/`) on the network volume under `/workspace/.home`, and installs Claude Code if missing. Needs a network volume at `/workspace` |
+| `runpod-ephemeral` | Sources `/etc/rp_environment` (pod env vars), supplies a GitHub credential from `GH_TOKEN`, and installs Claude Code if missing. Keeps nothing on a volume, so any pod in any datacenter works; see [below](#runpod-ephemeral-credentials) |
 
 A profile is a directory with any of `bashrc.sh`, `zshrc.sh`, `gitconfig` and
 `install-options.sh`. `install-options.sh` is read by `install.sh` and can set:
@@ -93,11 +94,22 @@ For each persisted path, `install.sh` does one of the following:
   backing up any local copy as described in [Bootstrap](#bootstrap).
 - **Parent of `PERSIST_DIR` missing (e.g. the volume isn't mounted):** skips
   the path rather than putting it on ephemeral disk.
+- **Parent of `PERSIST_DIR` can't keep files private (e.g. an object-storage
+  mount such as a RunPod global volume):** skips the path.
 
 Quit Claude Code before the run that first moves `~/.claude`. Switching
 profiles leaves persisted paths in place. Persisted state can include
 credentials such as `~/.claude/.credentials.json`, so `PERSIST_DIR` must be
 private storage; `install.sh` creates it readable only by you.
+
+### `runpod-ephemeral` credentials
+
+Store two [RunPod secrets](https://docs.runpod.io/pods/templates/secrets): the
+token printed by `claude setup-token` (valid for about a year) and a
+fine-grained GitHub personal access token. Expose them in the pod template as
+`CLAUDE_CODE_OAUTH_TOKEN={{ RUNPOD_SECRET_<name> }}` and
+`GH_TOKEN={{ RUNPOD_SECRET_<name> }}`. Claude Code session history and memory
+don't carry over between pods.
 
 ## What's tracked
 

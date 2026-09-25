@@ -78,15 +78,36 @@ fi
 
 PERSIST_DIR=""
 PERSIST_PATHS=()
-PERSIST_SKIPPED=""
+PERSIST_SKIP_REASON=""
 INSTALL_CLAUDE=false
+
+# True if a file in directory $1 can be made private. Object-storage mounts
+# (e.g. RunPod global volumes) can't set permission bits.
+keeps_files_private() {
+  local probe mode=""
+  probe="$(mktemp "$1/.dotfiles-probe.XXXXXX" 2>/dev/null)" || return 1
+  chmod 600 "$probe" 2>/dev/null && mode="$(ls -l "$probe")"
+  rm -f "$probe"
+  case "$mode" in
+    -rw-------*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 if [ "$PROFILE" != default ] && [ -f "$DOTFILES_DIR/profiles/$PROFILE/install-options.sh" ]; then
   . "$DOTFILES_DIR/profiles/$PROFILE/install-options.sh"
   # A missing parent means the volume isn't mounted; creating it would put
-  # "persistent" state on ephemeral disk.
-  if [ ! -d "$(dirname "$PERSIST_DIR")" ]; then
-    PERSIST_SKIPPED="$(dirname "$PERSIST_DIR")"
-    PERSIST_PATHS=()
+  # "persistent" state on ephemeral disk. Persisted state includes credentials.
+  if [ ${#PERSIST_PATHS[@]} -gt 0 ]; then
+    persist_parent="$(dirname "$PERSIST_DIR")"
+    if [ ! -d "$persist_parent" ]; then
+      PERSIST_SKIP_REASON="$persist_parent not found: skipping persistent paths (re-run once it's mounted)"
+    elif ! keeps_files_private "$persist_parent"; then
+      PERSIST_SKIP_REASON="$persist_parent can't keep files private (e.g. an object-storage mount): skipping persistent paths"
+    fi
+    if [ -n "$PERSIST_SKIP_REASON" ]; then
+      PERSIST_PATHS=()
+    fi
   fi
 fi
 
@@ -151,8 +172,8 @@ any_changes=false
 echo "== Plan =="
 echo "  profile: $PROFILE"
 
-if [ -n "$PERSIST_SKIPPED" ]; then
-  echo "  - $PERSIST_SKIPPED not found: skipping persistent paths (re-run once it's mounted)"
+if [ -n "$PERSIST_SKIP_REASON" ]; then
+  echo "  - $PERSIST_SKIP_REASON"
 fi
 for entry in ${PERSIST_PATHS[@]+"${PERSIST_PATHS[@]}"}; do
   dest="$HOME/${entry%/}"
