@@ -75,10 +75,13 @@ selecting `default` removes only the old profile's symlinks.
 | Profile | Contents |
 |---|---|
 | `runpod` | Sources `/etc/rp_environment` (pod env vars), conda from `/workspace/miniconda3`, and git's credential store. Keeps Claude Code state (`~/.claude/` and `~/.claude.json`: sessions, history, memory, login, plugins, project trust), `~/.git-credentials` and the Hugging Face cache (`~/.cache/huggingface/`) on the network volume under `/workspace/.home`, and installs Claude Code if missing. Needs a network volume at `/workspace` |
-| `runpod-ephemeral` | Sources `/etc/rp_environment` (pod env vars), supplies a GitHub credential from `GH_TOKEN`, and installs Claude Code if missing. Keeps nothing on a volume, so any pod in any datacenter works; see [below](#runpod-ephemeral-credentials) |
+| `runpod-ephemeral` | Sources `/etc/rp_environment` (pod env vars), supplies a GitHub credential from `GH_TOKEN`, installs Claude Code if missing, and marks Claude Code onboarding done so it starts logged in from `CLAUDE_CODE_OAUTH_TOKEN`. Keeps nothing on a volume, so any pod in any datacenter works; see [below](#runpod-ephemeral-credentials) |
 
-A profile is a directory with any of `bashrc.sh`, `zshrc.sh`, `gitconfig` and
-`install-options.sh`. `install-options.sh` is read by `install.sh` and can set:
+A profile is a directory with any of `bashrc.sh`, `zshrc.sh`, `gitconfig`,
+`claude.json` and `install-options.sh`. `claude.json` is deep-merged into
+`~/.claude.json` the same way as `settings.json` (missing keys added,
+differing keys reported as conflicts). `install-options.sh` is read by
+`install.sh` and can set:
 
 - `INSTALL_CLAUDE=true` to install Claude Code with the official native
   installer when `claude` isn't already installed. Needs `curl`; a failed
@@ -108,8 +111,10 @@ Store two [RunPod secrets](https://docs.runpod.io/pods/templates/secrets): the
 token printed by `claude setup-token` (valid for about a year) and a
 fine-grained GitHub personal access token. Expose them in the pod template as
 `CLAUDE_CODE_OAUTH_TOKEN={{ RUNPOD_SECRET_<name> }}` and
-`GH_TOKEN={{ RUNPOD_SECRET_<name> }}`. Claude Code session history and memory
-don't carry over between pods.
+`GH_TOKEN={{ RUNPOD_SECRET_<name> }}`. The profile's `claude.json` sets
+`hasCompletedOnboarding`, since interactive Claude Code otherwise shows its
+login screen on a fresh `~/.claude.json` despite the token. Claude Code session
+history and memory don't carry over between pods.
 
 ## What's tracked
 
@@ -120,6 +125,7 @@ don't carry over between pods.
 | `bash/.bashrc` | `~/.bashrc` | Bash fallback for shells/images without zsh |
 | `git/.gitconfig` | `~/.gitconfig` | Git identity |
 | `profiles/<name>/{bashrc.sh,zshrc.sh,gitconfig}` | `~/.config/dotfiles/profile.d/` | Machine-specific config for the selected profile |
+| `profiles/<name>/claude.json` | merged into `~/.claude.json` | Claude Code app state the profile needs (e.g. onboarding done) |
 | `profiles/<name>/install-options.sh` | read by `install.sh` | The profile's persistent `$HOME` paths and whether to install Claude Code |
 | `claude/statusline-command.sh` | `~/.claude/statusline-command.sh` | Claude Code status line: `user@host` (only as root or over SSH, like the p10k context segment), path, git branch and state (`⇡⇣ ~ + ! ?`) led by a remote-service icon (GitHub, GitLab, Bitbucket, Azure, else generic git, as in p10k) with the icon and branch linking to the remote repo, a `wt:<name>` tag inside a linked git worktree, context-usage bar, model with effort level. A second row lists directories added with `/add-dir` (absent when there are none). Styled after the Powerlevel10k prompt in `zsh/.p10k.zsh`; on narrow terminals drops effort, then the worktree tag, then the model, then `user@host` |
 | `claude/settings.snippet.json` | merged into `~/.claude/settings.json` | Registers the status line command, ruff (Python) and biome (JS/TS) auto-fix/format hooks, and attribution suppression |
@@ -130,7 +136,7 @@ Third-party frameworks (Oh My Zsh, zsh-autosuggestions, zsh-syntax-highlighting,
 Powerlevel10k) are **not** vendored here — `install.sh` clones them fresh from
 their own repos on each machine.
 
-`claude/merge_settings.py` does the settings.json merge described above; it's
+`claude/merge_settings.py` does the `settings.json` and `.claude.json` merges described above; it's
 invoked by `install.sh`, not symlinked anywhere itself.
 
 ## Not tracked, on purpose

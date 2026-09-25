@@ -7,7 +7,8 @@
 # config) into ~/.config/dotfiles/profile.d/; without it the profile already
 # installed is kept, else "default" (no profile). A profile's
 # install-options.sh can move $HOME paths onto persistent storage (symlinked
-# back) and opt in to installing Claude Code when it's missing.
+# back) and opt in to installing Claude Code when it's missing; a profile's
+# claude.json is deep-merged into ~/.claude.json.
 set -euo pipefail
 
 for cmd in git python3 jq; do
@@ -166,6 +167,11 @@ for f in "${PROFILE_FILES[@]}"; do
 done
 SETTINGS_SNIPPET="$DOTFILES_DIR/claude/settings.snippet.json"
 SETTINGS_FILE="$HOME/.claude/settings.json"
+CLAUDE_JSON_SNIPPET=""
+CLAUDE_JSON_FILE="$HOME/.claude.json"
+if [ "$PROFILE" != default ] && [ -f "$DOTFILES_DIR/profiles/$PROFILE/claude.json" ]; then
+  CLAUDE_JSON_SNIPPET="$DOTFILES_DIR/profiles/$PROFILE/claude.json"
+fi
 
 any_changes=false
 
@@ -241,19 +247,28 @@ for dest in ${STALE[@]+"${STALE[@]}"}; do
   any_changes=true
 done
 
-echo "  -- settings.json --"
-settings_exit=0
-settings_output=$(python3 "$DOTFILES_DIR/claude/merge_settings.py" "$SETTINGS_SNIPPET" "$(persisted_path "$SETTINGS_FILE")" 2>&1) || settings_exit=$?
-echo "$settings_output" | sed 's/^/  /'
-if [ "$settings_exit" != "0" ]; then
-  echo "  (conflicts above are left as-is; reconcile settings.snippet.json manually if you want dotfiles to own them)"
-fi
-if echo "$settings_output" | grep -qE '^\s*\+ (add|update)'; then
-  any_changes=true
+merge_conflicts=false
+# Previews deep-merging JSON snippet $2 into file $3, under heading $1.
+plan_json_merge() {
+  local output status=0
+  echo "  -- $1 --"
+  output=$(python3 "$DOTFILES_DIR/claude/merge_settings.py" "$2" "$(persisted_path "$3")" 2>&1) || status=$?
+  echo "$output" | sed 's/^/  /'
+  if [ "$status" != "0" ]; then
+    merge_conflicts=true
+    echo "  (conflicts above are left as-is; reconcile ${2#"$DOTFILES_DIR"/} manually if you want dotfiles to own them)"
+  fi
+  if echo "$output" | grep -qE '^\s*\+ (add|update)'; then
+    any_changes=true
+  fi
+}
+plan_json_merge settings.json "$SETTINGS_SNIPPET" "$SETTINGS_FILE"
+if [ -n "$CLAUDE_JSON_SNIPPET" ]; then
+  plan_json_merge .claude.json "$CLAUDE_JSON_SNIPPET" "$CLAUDE_JSON_FILE"
 fi
 
 if ! $any_changes; then
-  if [ "$settings_exit" != "0" ]; then
+  if $merge_conflicts; then
     echo "Nothing to apply, but see the conflict above."
   else
     echo "Already up to date."
@@ -355,6 +370,11 @@ fi
 
 echo "Merging Claude Code settings.json..."
 python3 "$DOTFILES_DIR/claude/merge_settings.py" "$SETTINGS_SNIPPET" "$SETTINGS_FILE" --apply || true
+if [ -n "$CLAUDE_JSON_SNIPPET" ]; then
+  echo "Merging profile keys into ~/.claude.json..."
+  # Private if newly created: Claude Code later stores account details in it.
+  (umask 077 && python3 "$DOTFILES_DIR/claude/merge_settings.py" "$CLAUDE_JSON_SNIPPET" "$CLAUDE_JSON_FILE" --apply) || true
+fi
 
 if $HAS_ZSH; then
   echo "Done. Start a new shell (or 'exec zsh') to pick up the changes."

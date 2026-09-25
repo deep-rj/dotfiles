@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deep-merge settings.snippet.json into ~/.claude/settings.json, leaving keys that locally differ untouched instead of overwriting them. Usage: merge_settings.py <snippet.json> <settings.json> [--apply]"""
+"""Deep-merge a JSON snippet (e.g. settings.snippet.json) into a JSON file (e.g. ~/.claude/settings.json), leaving keys that locally differ untouched instead of overwriting them. Usage: merge_settings.py <snippet.json> <target.json> [--apply]"""
 
 import json
 import os
