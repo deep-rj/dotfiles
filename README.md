@@ -20,6 +20,7 @@ breaking the bootstrap.
 | `zsh` | actually using `.zshrc` (Oh My Zsh, Powerlevel10k) | no — without it `install.sh` skips all zsh setup and `.bashrc` is the fallback; re-run after installing zsh | `apt install zsh` / `brew install zsh` |
 | A [Nerd Font](https://www.nerdfonts.com/) in the terminal | the git-branch and remote-service icons in the Claude Code status line, and Powerlevel10k's glyphs | no — the icon renders as a missing-glyph box without it | https://github.com/romkatv/powerlevel10k#fonts |
 | `uv` | Python version and environment management (replaces pyenv), the hook's Python auto-fix/format (ruff) via `uvx`, and running `git-filter-repo` on demand (via `uvx --from git-filter-repo git-filter-repo`) in the `extract-public-repo` skill | no | https://docs.astral.sh/uv/getting-started/installation/ |
+| conda ([Miniforge](https://github.com/conda-forge/miniforge)) | repos whose environments are conda-based; `.bashrc`/`.zshrc` activate `~/miniforge3`, else `~/miniconda3` | no — profiles can opt in to `install.sh` installing it (see [Profiles](#profiles)) | https://github.com/conda-forge/miniforge#install |
 | `nvm` + Node (for `npx`) | the hook's JS/TS auto-fix/format (biome) | no | https://github.com/nvm-sh/nvm#install--update-script |
 | `gitleaks` | the `extract-public-repo` skill's secret scan | no — scan falls back to weaker pattern matching without it | `apt install gitleaks` / see https://github.com/gitleaks/gitleaks#installing |
 | `trufflehog` | the `extract-public-repo` skill's secret scan (verified-live-credential detection) | no — scan skips this pass without it | https://github.com/trufflesecurity/trufflehog#installation |
@@ -75,7 +76,7 @@ selecting `default` removes only the old profile's symlinks.
 | Profile | Contents |
 |---|---|
 | `runpod` | Sources `/etc/rp_environment` (pod env vars), conda from `/workspace/miniconda3`, and git's credential store. Keeps Claude Code state (`~/.claude/` and `~/.claude.json`: sessions, history, memory, login, plugins, project trust), `~/.git-credentials` and the Hugging Face cache (`~/.cache/huggingface/`) on the network volume under `/workspace/.home`, and installs Claude Code if missing. Needs a network volume at `/workspace` |
-| `runpod-ephemeral` | Sources `/etc/rp_environment` (pod env vars), supplies a GitHub credential from `GH_TOKEN`, installs Claude Code if missing, and marks Claude Code onboarding done so it starts logged in from `CLAUDE_CODE_OAUTH_TOKEN`. Keeps nothing on a volume, so any pod in any datacenter works; see [below](#runpod-ephemeral-credentials) |
+| `runpod-ephemeral` | Sources `/etc/rp_environment` (pod env vars), supplies a GitHub credential from `GH_TOKEN`, installs Claude Code and Miniforge (conda) if missing, and marks Claude Code onboarding done so it starts logged in from `CLAUDE_CODE_OAUTH_TOKEN`. Keeps nothing on a volume, so any pod in any datacenter works; see [below](#runpod-ephemeral-credentials) |
 
 A profile is a directory with any of `bashrc.sh`, `zshrc.sh`, `gitconfig`,
 `claude.json` and `install-options.sh`. `claude.json` is deep-merged into
@@ -86,6 +87,10 @@ differing keys reported as conflicts). `install-options.sh` is read by
 - `INSTALL_CLAUDE=true` to install Claude Code with the official native
   installer when `claude` isn't already installed. Needs `curl`; a failed
   download is reported without stopping the rest of the install.
+- `INSTALL_CONDA=true` to install [Miniforge](https://github.com/conda-forge/miniforge)
+  into `~/miniforge3` when no conda is installed, with the base environment
+  not activated automatically. Needs `curl`; a failure is reported without
+  stopping the rest of the install.
 - `PERSIST_DIR` and `PERSIST_PATHS` (paths relative to `$HOME`, directories
   with a trailing `/`) for state that must survive the machine being
   recreated.
@@ -126,7 +131,7 @@ history and memory don't carry over between pods.
 | `git/.gitconfig` | `~/.gitconfig` | Git identity |
 | `profiles/<name>/{bashrc.sh,zshrc.sh,gitconfig}` | `~/.config/dotfiles/profile.d/` | Machine-specific config for the selected profile |
 | `profiles/<name>/claude.json` | merged into `~/.claude.json` | Claude Code app state the profile needs (e.g. onboarding done) |
-| `profiles/<name>/install-options.sh` | read by `install.sh` | The profile's persistent `$HOME` paths and whether to install Claude Code |
+| `profiles/<name>/install-options.sh` | read by `install.sh` | The profile's persistent `$HOME` paths and whether to install Claude Code and Miniforge |
 | `claude/statusline-command.sh` | `~/.claude/statusline-command.sh` | Claude Code status line: `user@host` (only as root or over SSH, like the p10k context segment), path, git branch and state (`⇡⇣ ~ + ! ?`) led by a remote-service icon (GitHub, GitLab, Bitbucket, Azure, else generic git, as in p10k) with the icon and branch linking to the remote repo, a `wt:<name>` tag inside a linked git worktree, context-usage bar, model with effort level. A second row lists directories added with `/add-dir` (absent when there are none). Styled after the Powerlevel10k prompt in `zsh/.p10k.zsh`; on narrow terminals drops effort, then the worktree tag, then the model, then `user@host` |
 | `claude/settings.snippet.json` | merged into `~/.claude/settings.json` | Registers the status line command, ruff (Python) and biome (JS/TS) auto-fix/format hooks, and attribution suppression |
 | `claude/CLAUDE.md` | `~/.claude/CLAUDE.md` | Global Claude Code instructions (all projects) |

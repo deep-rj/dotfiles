@@ -114,7 +114,13 @@ source $ZSH/oh-my-zsh.sh
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
 export PATH="$HOME/.local/bin:$PATH"
 
-[ -x "$HOME/miniconda3/bin/conda" ] && eval "$("$HOME/miniconda3/bin/conda" shell.zsh hook)"
+for _conda_root in "$HOME/miniforge3" "$HOME/miniconda3"; do
+  if [ -x "$_conda_root/bin/conda" ]; then
+    eval "$("$_conda_root/bin/conda" shell.zsh hook)"
+    break
+  fi
+done
+unset _conda_root
 
 
 export NVM_DIR="$HOME/.nvm"

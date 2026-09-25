@@ -121,6 +121,14 @@ case ":$PATH:" in
     *) export PATH="$HOME/.local/bin:$PATH" ;;
 esac
 
+for _conda_root in "$HOME/miniforge3" "$HOME/miniconda3"; do
+    if [ -x "$_conda_root/bin/conda" ]; then
+        eval "$("$_conda_root/bin/conda" shell.bash hook)"
+        break
+    fi
+done
+unset _conda_root
+
 # Machine-specific config linked in by `install.sh --profile`.
 if [ -r "$HOME/.config/dotfiles/profile.d/bashrc.sh" ]; then
     . "$HOME/.config/dotfiles/profile.d/bashrc.sh"

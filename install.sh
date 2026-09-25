@@ -7,7 +7,7 @@
 # config) into ~/.config/dotfiles/profile.d/; without it the profile already
 # installed is kept, else "default" (no profile). A profile's
 # install-options.sh can move $HOME paths onto persistent storage (symlinked
-# back) and opt in to installing Claude Code when it's missing; a profile's
+# back) and opt in to installing Claude Code or Miniforge when missing; its
 # claude.json is deep-merged into ~/.claude.json.
 set -euo pipefail
 
@@ -81,6 +81,7 @@ PERSIST_DIR=""
 PERSIST_PATHS=()
 PERSIST_SKIP_REASON=""
 INSTALL_CLAUDE=false
+INSTALL_CONDA=false
 
 # True if a file in directory $1 can be made private. Object-storage mounts
 # (e.g. RunPod global volumes) can't set permission bits.
@@ -219,6 +220,18 @@ if $INSTALL_CLAUDE && ! command -v claude >/dev/null 2>&1 && [ ! -x "$HOME/.loca
     any_changes=true
   else
     echo "  - curl not found: skipping Claude Code install (re-run after installing curl)"
+  fi
+fi
+
+NEED_CONDA=false
+if $INSTALL_CONDA && ! command -v conda >/dev/null 2>&1 &&
+  [ ! -x "$HOME/miniforge3/bin/conda" ] && [ ! -x "$HOME/miniconda3/bin/conda" ]; then
+  if command -v curl >/dev/null 2>&1; then
+    echo "  + install Miniforge (conda) into ~/miniforge3"
+    NEED_CONDA=true
+    any_changes=true
+  else
+    echo "  - curl not found: skipping Miniforge install (re-run after installing curl)"
   fi
 fi
 
@@ -366,6 +379,25 @@ if $NEED_CLAUDE; then
   echo "Installing Claude Code..."
   curl -fsSL https://claude.ai/install.sh | bash ||
     echo "Claude Code install failed; re-run install.sh to retry." >&2
+fi
+
+if $NEED_CONDA; then
+  echo "Installing Miniforge..."
+  conda_tmp="$(mktemp -d)"
+  # The installer refuses to run unless its file name ends in .sh.
+  conda_installer="$conda_tmp/Miniforge3.sh"
+  # -b leaves shell rc files alone (they're symlinks into this repo); -u lets
+  # a retry reuse a partial install. --system keeps the setting out of the
+  # ~/.condarc that other conda installs also read.
+  if curl -fsSL -o "$conda_installer" \
+      "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh" &&
+    bash "$conda_installer" -b -u -p "$HOME/miniforge3" &&
+    "$HOME/miniforge3/bin/conda" config --system --set auto_activate false; then
+    echo "Installed Miniforge into ~/miniforge3"
+  else
+    echo "Miniforge install failed; re-run install.sh to retry." >&2
+  fi
+  rm -rf "$conda_tmp"
 fi
 
 echo "Merging Claude Code settings.json..."
