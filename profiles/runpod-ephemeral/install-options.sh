@@ -2,3 +2,4 @@
 # RunPod secrets exposed as CLAUDE_CODE_OAUTH_TOKEN and GH_TOKEN.
 INSTALL_CLAUDE=true
 INSTALL_CONDA=true
+INSTALL_UV=true

@@ -82,6 +82,7 @@ PERSIST_PATHS=()
 PERSIST_SKIP_REASON=""
 INSTALL_CLAUDE=false
 INSTALL_CONDA=false
+INSTALL_UV=false
 
 # True if a file in directory $1 can be made private. Object-storage mounts
 # (e.g. RunPod global volumes) can't set permission bits.
@@ -220,6 +221,17 @@ if $INSTALL_CLAUDE && ! command -v claude >/dev/null 2>&1 && [ ! -x "$HOME/.loca
     any_changes=true
   else
     echo "  - curl not found: skipping Claude Code install (re-run after installing curl)"
+  fi
+fi
+
+NEED_UV=false
+if $INSTALL_UV && ! command -v uv >/dev/null 2>&1 && [ ! -x "$HOME/.local/bin/uv" ]; then
+  if command -v curl >/dev/null 2>&1; then
+    echo "  + install uv (official installer)"
+    NEED_UV=true
+    any_changes=true
+  else
+    echo "  - curl not found: skipping uv install (re-run after installing curl)"
   fi
 fi
 
@@ -379,6 +391,14 @@ if $NEED_CLAUDE; then
   echo "Installing Claude Code..."
   curl -fsSL https://claude.ai/install.sh | bash ||
     echo "Claude Code install failed; re-run install.sh to retry." >&2
+fi
+
+if $NEED_UV; then
+  echo "Installing uv..."
+  # UV_NO_MODIFY_PATH keeps the installer from appending to shell rc files
+  # (symlinks into this repo); ~/.local/bin is already on PATH.
+  curl -LsSf https://astral.sh/uv/install.sh | UV_NO_MODIFY_PATH=1 sh ||
+    echo "uv install failed; re-run install.sh to retry." >&2
 fi
 
 if $NEED_CONDA; then
