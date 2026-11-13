@@ -66,6 +66,7 @@ else
 
   mv "$TMP_JSON" "$CLAUDE_JSON"
   chmod 600 "$CLAUDE_JSON"
+  # shellcheck disable=SC2088
   echo "~/.claude.json project entry migrated ($OLD -> $NEW)"
 fi
 

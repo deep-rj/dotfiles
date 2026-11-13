@@ -98,6 +98,7 @@ keeps_files_private() {
 }
 
 if [ "$PROFILE" != default ] && [ -f "$DOTFILES_DIR/profiles/$PROFILE/install-options.sh" ]; then
+  # shellcheck source=/dev/null
   . "$DOTFILES_DIR/profiles/$PROFILE/install-options.sh"
   # A missing parent means the volume isn't mounted; creating it would put
   # "persistent" state on ephemeral disk. Persisted state includes credentials.
@@ -317,7 +318,8 @@ fi
 echo "== Applying =="
 
 backup() {
-  local backup_dest="$BACKUP_DIR/$(backup_rel "$1")"
+  local backup_dest
+  backup_dest="$BACKUP_DIR/$(backup_rel "$1")"
   mkdir -p "$(dirname "$backup_dest")"
   mv "$1" "$backup_dest"
   echo "Backed up existing $1 -> $backup_dest"

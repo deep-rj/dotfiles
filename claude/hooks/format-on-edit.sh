@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# PostToolUse hook: auto-format edited files (ruff for Python, biome for JS/TS).
+# PostToolUse hook: auto-format edited files (ruff for Python, biome for JS/TS)
+# and lint shell scripts (shellcheck).
 # Output back to Claude is conditional:
 #   - unfixable lint errors remain -> decision:block with the tool output
 #   - formatter rewrote the file   -> additionalContext (informational)
@@ -12,6 +13,16 @@ f=$(jq -r '.tool_input.file_path // .tool_input.notebook_path // empty')
 
 truncate_out() {
   head -n 40
+}
+
+# zsh files are excluded because shellcheck can't parse zsh.
+is_bash_script() {
+  case "$1" in
+    */zsh/*|*.zsh|*zshrc.sh|*zshenv.sh) return 1 ;;
+    *.sh|*.bash) return 0 ;;
+    *.*) return 1 ;;
+  esac
+  head -n 1 "$1" 2>/dev/null | grep -Eq '^#!.*(/|[[:space:]])(ba)?sh([[:space:]]|$)'
 }
 
 decision=""
@@ -67,7 +78,15 @@ $(printf '%s' "$biome_out" | truncate_out)"
     ;;
 
   *)
-    exit 0
+    is_bash_script "$f" || exit 0
+    command -v uvx >/dev/null 2>&1 || exit 0
+    check_out=$(uvx --from shellcheck-py shellcheck -x -P SCRIPTDIR -S warning "$f" 2>&1)
+    check_status=$?
+    # Status 1 means findings; other failures (e.g. uvx offline) aren't lint results.
+    if [ "$check_status" = "1" ]; then
+      decision="shellcheck reported issues in $f:
+$(printf '%s' "$check_out" | truncate_out)"
+    fi
     ;;
 esac
 
