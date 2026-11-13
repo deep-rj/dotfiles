@@ -133,7 +133,7 @@ history and memory don't carry over between pods.
 | `profiles/<name>/claude.json` | merged into `~/.claude.json` | Claude Code app state the profile needs (e.g. onboarding done) |
 | `profiles/<name>/install-options.sh` | read by `install.sh` | The profile's persistent `$HOME` paths and whether to install Claude Code and Miniforge |
 | `claude/statusline-command.sh` | `~/.claude/statusline-command.sh` | Claude Code status line: `user@host` (only as root or over SSH, like the p10k context segment), path, git branch and state (`⇡⇣ ~ + ! ?`) led by a remote-service icon (GitHub, GitLab, Bitbucket, Azure, else generic git, as in p10k) with the icon and branch linking to the remote repo, a `wt:<name>` tag inside a linked git worktree, context-usage bar, model with effort level. A second row lists directories added with `/add-dir` (absent when there are none). Styled after the Powerlevel10k prompt in `zsh/.p10k.zsh`; on narrow terminals drops effort, then the worktree tag, then the model, then `user@host` |
-| `claude/settings.snippet.json` | merged into `~/.claude/settings.json` | Registers the status line command, ruff (Python) and biome (JS/TS) auto-fix/format hooks, and attribution suppression |
+| `claude/settings.snippet.json` | merged into `~/.claude/settings.json` | Enables the fullscreen TUI (fixed status bar, scrolling conversation pane), registers the status line command, ruff (Python) and biome (JS/TS) auto-fix/format hooks, and attribution suppression |
 | `claude/CLAUDE.md` | `~/.claude/CLAUDE.md` | Global Claude Code instructions (all projects) |
 | `claude/skills/extract-public-repo/` | `~/.claude/skills/extract-public-repo/` | Skill for spinning off a private repo (or subset of one) as a public repo, safely |
 
