@@ -76,7 +76,7 @@ selecting `default` removes only the old profile's symlinks.
 | Profile | Contents |
 |---|---|
 | `runpod` | Sources `/etc/rp_environment` (pod env vars), conda from `/workspace/miniconda3`, and git's credential store. Keeps Claude Code state (`~/.claude/` and `~/.claude.json`: sessions, history, memory, login, plugins, project trust), `~/.git-credentials` and the Hugging Face cache (`~/.cache/huggingface/`) on the network volume under `/workspace/.home`, and installs Claude Code and uv if missing. Needs a network volume at `/workspace` |
-| `runpod-ephemeral` | Sources `/etc/rp_environment` (pod env vars), supplies a GitHub credential from `GH_TOKEN`, installs Claude Code, uv and Miniforge (conda) if missing, and marks Claude Code onboarding done so it starts logged in from `CLAUDE_CODE_OAUTH_TOKEN`. Keeps nothing on a volume, so any pod in any datacenter works; see [below](#runpod-ephemeral-credentials) |
+| `runpod-ephemeral` | Sources `/etc/rp_environment` (pod env vars), supplies a GitHub credential from `GH_TOKEN`, installs Claude Code and uv if missing, and marks Claude Code onboarding done so it starts logged in from `CLAUDE_CODE_OAUTH_TOKEN`. Keeps nothing on a volume, so any pod in any datacenter works; see [below](#runpod-ephemeral-credentials) |
 
 A profile is a directory with any of `bashrc.sh`, `zshrc.sh`, `gitconfig`,
 `claude.json` and `install-options.sh`. `claude.json` is deep-merged into
