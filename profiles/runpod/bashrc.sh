@@ -5,7 +5,3 @@ if [ -r /etc/rp_environment ]; then
     PATH=$_dotfiles_path
     unset _dotfiles_path
 fi
-
-if [ -x /workspace/miniconda3/bin/conda ]; then
-    eval "$(/workspace/miniconda3/bin/conda shell.bash hook)"
-fi

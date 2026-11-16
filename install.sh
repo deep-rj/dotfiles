@@ -6,9 +6,8 @@
 # to only preview. --profile NAME links profiles/NAME/ (machine-specific
 # config) into ~/.config/dotfiles/profile.d/; without it the profile already
 # installed is kept, else "default" (no profile). A profile's
-# install-options.sh can move $HOME paths onto persistent storage (symlinked
-# back) and opt in to installing Claude Code or Miniforge when missing; its
-# claude.json is deep-merged into ~/.claude.json.
+# install-options.sh can opt in to installing Claude Code, uv or Miniforge when
+# missing; its claude.json is deep-merged into ~/.claude.json.
 set -euo pipefail
 
 for cmd in git python3 jq; do
@@ -77,57 +76,14 @@ if [ "$PROFILE" != default ] && [ ! -d "$DOTFILES_DIR/profiles/$PROFILE" ]; then
   exit 1
 fi
 
-PERSIST_DIR=""
-PERSIST_PATHS=()
-PERSIST_SKIP_REASON=""
 INSTALL_CLAUDE=false
 INSTALL_CONDA=false
 INSTALL_UV=false
 
-# True if a file in directory $1 can be made private. Object-storage mounts
-# (e.g. RunPod global volumes) can't set permission bits.
-keeps_files_private() {
-  local probe mode=""
-  probe="$(mktemp "$1/.dotfiles-probe.XXXXXX" 2>/dev/null)" || return 1
-  chmod 600 "$probe" 2>/dev/null && mode="$(ls -l "$probe")"
-  rm -f "$probe"
-  case "$mode" in
-    -rw-------*) return 0 ;;
-    *) return 1 ;;
-  esac
-}
-
 if [ "$PROFILE" != default ] && [ -f "$DOTFILES_DIR/profiles/$PROFILE/install-options.sh" ]; then
   # shellcheck source=/dev/null
   . "$DOTFILES_DIR/profiles/$PROFILE/install-options.sh"
-  # A missing parent means the volume isn't mounted; creating it would put
-  # "persistent" state on ephemeral disk. Persisted state includes credentials.
-  if [ ${#PERSIST_PATHS[@]} -gt 0 ]; then
-    persist_parent="$(dirname "$PERSIST_DIR")"
-    if [ ! -d "$persist_parent" ]; then
-      PERSIST_SKIP_REASON="$persist_parent not found: skipping persistent paths (re-run once it's mounted)"
-    elif ! keeps_files_private "$persist_parent"; then
-      PERSIST_SKIP_REASON="$persist_parent can't keep files private (e.g. an object-storage mount): skipping persistent paths"
-    fi
-    if [ -n "$PERSIST_SKIP_REASON" ]; then
-      PERSIST_PATHS=()
-    fi
-  fi
 fi
-
-# Where $1 resolves once PERSIST_PATHS are linked into PERSIST_DIR. Until a
-# path's store exists, its local copy is what gets moved there, so it stays.
-persisted_path() {
-  local p
-  for p in ${PERSIST_PATHS[@]+"${PERSIST_PATHS[@]}"}; do
-    p="${p%/}"
-    [ -e "$PERSIST_DIR/$p" ] || continue
-    case "$1" in
-      "$HOME/$p"|"$HOME/$p"/*) echo "$PERSIST_DIR/${1#"$HOME"/}"; return ;;
-    esac
-  done
-  echo "$1"
-}
 
 if command -v zsh >/dev/null 2>&1; then
   HAS_ZSH=true
@@ -181,27 +137,6 @@ any_changes=false
 echo "== Plan =="
 echo "  profile: $PROFILE"
 
-if [ -n "$PERSIST_SKIP_REASON" ]; then
-  echo "  - $PERSIST_SKIP_REASON"
-fi
-for entry in ${PERSIST_PATHS[@]+"${PERSIST_PATHS[@]}"}; do
-  dest="$HOME/${entry%/}"
-  store="$PERSIST_DIR/${entry%/}"
-  if [ -L "$dest" ] && [ "$(readlink "$dest")" = "$store" ]; then
-    continue
-  fi
-  any_changes=true
-  if [ ! -e "$store" ] && [ -e "$dest" ] && [ ! -L "$dest" ]; then
-    echo "  + persist $dest: move to $store and link back"
-  elif [ ! -e "$store" ]; then
-    echo "  + persist $dest: link to $store (new)"
-  elif [ -e "$dest" ] || [ -L "$dest" ]; then
-    echo "  + persist $dest: link to existing $store, backing up local copy to $BACKUP_DIR/$(backup_rel "$dest") first"
-  else
-    echo "  + persist $dest: link to existing $store"
-  fi
-done
-
 if $HAS_ZSH; then
   for entry in "${CLONES[@]}"; do
     dest="${entry#*|}"
@@ -251,20 +186,19 @@ fi
 for entry in "${LINKS[@]}"; do
   src="${entry%%|*}"
   dest="${entry#*|}"
-  current="$(persisted_path "$dest")"
-  if [ -L "$current" ] && [ "$(readlink "$current")" = "$src" ]; then
+  if [ -L "$dest" ] && [ "$(readlink "$dest")" = "$src" ]; then
     continue
   fi
   any_changes=true
-  if [ ! -e "$current" ]; then
+  if [ ! -e "$dest" ]; then
     echo "  + link $dest -> $src (new)"
-  elif is_profile_link "$current"; then
-    echo "  + relink $dest -> $src (was $(readlink "$current"))"
-  elif diff -q "$src" "$current" >/dev/null 2>&1; then
+  elif is_profile_link "$dest"; then
+    echo "  + relink $dest -> $src (was $(readlink "$dest"))"
+  elif diff -q "$src" "$dest" >/dev/null 2>&1; then
     echo "  + link $dest -> $src (identical content, replacing plain file with symlink)"
   else
     echo "  + link $dest -> $src, backing up existing file to $BACKUP_DIR/$(backup_rel "$dest") first:"
-    diff -u "$current" "$src" | sed 's/^/      /' || true
+    diff -u "$dest" "$src" | sed 's/^/      /' || true
   fi
 done
 
@@ -278,7 +212,7 @@ merge_conflicts=false
 plan_json_merge() {
   local output status=0
   echo "  -- $1 --"
-  output=$(python3 "$DOTFILES_DIR/claude/merge_settings.py" "$2" "$(persisted_path "$3")" 2>&1) || status=$?
+  output=$(python3 "$DOTFILES_DIR/claude/merge_settings.py" "$2" "$3" 2>&1) || status=$?
   echo "$output" | sed 's/^/  /'
   if [ "$status" != "0" ]; then
     merge_conflicts=true
@@ -324,37 +258,6 @@ backup() {
   mv "$1" "$backup_dest"
   echo "Backed up existing $1 -> $backup_dest"
 }
-
-# Entries ending in / are directories, created if missing; a missing file is
-# left for its owner to create through the symlink.
-persist() {
-  local entry="$1"
-  local dest="$HOME/${entry%/}" store="$PERSIST_DIR/${entry%/}"
-  if [ -L "$dest" ] && [ "$(readlink "$dest")" = "$store" ]; then
-    return
-  fi
-  mkdir -p "$(dirname "$store")" "$(dirname "$dest")"
-  if [ ! -e "$store" ] && [ -e "$dest" ] && [ ! -L "$dest" ]; then
-    mv "$dest" "$store"
-    echo "Moved $dest -> $store"
-  else
-    if [ -e "$dest" ] || [ -L "$dest" ]; then
-      backup "$dest"
-    fi
-    if [ "$entry" != "${entry%/}" ]; then
-      mkdir -p "$store"
-    fi
-  fi
-  ln -s "$store" "$dest"
-  echo "Linked $dest -> $store"
-}
-if [ ${#PERSIST_PATHS[@]} -gt 0 ]; then
-  # Private because persisted state includes credentials.
-  (umask 077 && mkdir -p "$PERSIST_DIR")
-fi
-for entry in ${PERSIST_PATHS[@]+"${PERSIST_PATHS[@]}"}; do
-  persist "$entry"
-done
 
 if $HAS_ZSH; then
   for entry in "${CLONES[@]}"; do
